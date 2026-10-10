@@ -1,5 +1,7 @@
 # Reddit Helper (approve-first)
 
+[![CI](https://github.com/SaurabhShukla0025/reddit-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/SaurabhShukla0025/reddit-helper/actions/workflows/ci.yml)
+
 A small Python tool that finds relevant Reddit posts in the communities you list
 and **drafts** comments following per-community guidelines. You review and approve
 before anything is posted. It uses Reddit's official API (PRAW), stays within the
