@@ -1,0 +1,12 @@
+# Your real credentials and subreddit list — never commit these.
+config.yaml
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local database and logs (added in later steps)
+*.db
+*.log

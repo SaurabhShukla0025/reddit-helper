@@ -1,0 +1,7 @@
+# Reddit's official API wrapper. Pinned to a recent major version.
+praw>=7.7,<8
+# Config files in YAML.
+PyYAML>=6,<7
+# Claude API, for drafting comments (step 3). The API key is read from the
+# ANTHROPIC_API_KEY environment variable, never from a config file.
+anthropic>=0.69
