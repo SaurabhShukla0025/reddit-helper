@@ -42,15 +42,15 @@ class Subreddit:
 
 
 @dataclass
-class ClaudeConfig:
-    """Settings for the Claude-API comment drafter (step 3).
+class GeminiConfig:
+    """Settings for the Gemini (Google) comment drafter (step 3).
 
-    The API key is NOT stored here - it is read from the ANTHROPIC_API_KEY
+    The API key is NOT stored here - it is read from the GEMINI_API_KEY
     environment variable so no secret lands in a file.
     """
 
-    model: str = "claude-opus-5-5"
-    effort: str = "medium"
+    model: str = "gemini-3.8-flash"
+    temperature: float = 0.7
     max_tokens: int = 1024
     max_drafts_per_run: int = 10
 
@@ -70,14 +70,13 @@ class Config:
     subreddits: list[Subreddit]
     listing: str
     limit: int
-    claude: ClaudeConfig
+    gemini: GeminiConfig
     post: PostConfig
 
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 _REQUIRED_CREDS = ("client_id", "client_secret", "username", "password", "user_agent")
 _PLACEHOLDERS = {"YOUR_CLIENT_ID", "YOUR_CLIENT_SECRET", "YOUR_REDDIT_USERNAME", "YOUR_REDDIT_PASSWORD"}
-_EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 
 
 def _as_terms(value) -> tuple[str, ...]:
@@ -170,7 +169,7 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
         subreddits=subreddits,
         listing=listing,
         limit=int(fetch.get("limit", 10)),
-        claude=_claude_config(data.get("claude") or {}),
+        gemini=_gemini_config(data.get("gemini") or {}),
         post=_post_config(data.get("post") or {}),
     )
 
@@ -208,28 +207,33 @@ def _post_config(raw: dict) -> PostConfig:
     )
 
 
-def _claude_config(raw: dict) -> ClaudeConfig:
-    """Builds the drafter settings from a `claude:` block, with sane defaults."""
-    defaults = ClaudeConfig()
-    unknown = set(raw) - {"model", "effort", "max_tokens", "max_drafts_per_run"}
+def _gemini_config(raw: dict) -> GeminiConfig:
+    """Builds the drafter settings from a `gemini:` block, with sane defaults."""
+    defaults = GeminiConfig()
+    unknown = set(raw) - {"model", "temperature", "max_tokens", "max_drafts_per_run"}
     if unknown:
-        raise SystemExit(f"config.yaml: unknown claude keys: {', '.join(sorted(unknown))}")
+        raise SystemExit(f"config.yaml: unknown gemini keys: {', '.join(sorted(unknown))}")
 
-    effort = str(raw.get("effort", defaults.effort))
-    if effort not in _EFFORT_LEVELS:
-        raise SystemExit(f"config.yaml: claude.effort must be one of: {', '.join(_EFFORT_LEVELS)}")
+    temperature = defaults.temperature
+    if raw.get("temperature") is not None:
+        try:
+            temperature = float(raw["temperature"])
+        except (TypeError, ValueError):
+            raise SystemExit(f"config.yaml: gemini.temperature must be a number, got {raw['temperature']!r}")
+        if not 0.0 <= temperature <= 2.0:
+            raise SystemExit(f"config.yaml: gemini.temperature must be between 0 and 2, got {temperature}")
 
     def positive(key: str, fallback: int) -> int:
         if raw.get(key) is None:
             return fallback
-        value = _as_int(raw[key], f"claude.{key}")
+        value = _as_int(raw[key], f"gemini.{key}")
         if value < 1:
-            raise SystemExit(f"config.yaml: claude.{key} must be at least 1, got {value}")
+            raise SystemExit(f"config.yaml: gemini.{key} must be at least 1, got {value}")
         return value
 
-    return ClaudeConfig(
+    return GeminiConfig(
         model=str(raw.get("model", defaults.model)),
-        effort=effort,
+        temperature=temperature,
         max_tokens=positive("max_tokens", defaults.max_tokens),
         max_drafts_per_run=positive("max_drafts_per_run", defaults.max_drafts_per_run),
     )

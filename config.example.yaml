@@ -14,12 +14,14 @@ fetch:
   listing: "new"      # new | rising | hot
   limit: 10
 
-# Comment drafting (step 3) uses the Claude API. The API key is NOT set here —
-# it is read from the ANTHROPIC_API_KEY environment variable so no secret lands
-# in a file. All fields below are optional and shown with their defaults.
-claude:
-  model: "claude-opus-5-5"   # which Claude model drafts comments
-  effort: "medium"           # low | medium | high | xhigh | max
+# Comment drafting (step 3) uses the Gemini (Google) API. The API key is NOT set
+# here — it is read from the GEMINI_API_KEY environment variable so no secret
+# lands in a file. Get a free key at https://aistudio.google.com/apikey.
+# All fields below are optional and shown with their defaults.
+gemini:
+  model: "gemini-3.8-flash"  # which Gemini model drafts comments
+                             # (cheaper option: "gemini-3.5-flash-lite")
+  temperature: 0.7           # 0 = focused/consistent, up to 2 = more varied
   max_tokens: 1024           # cap per draft (comments are short)
   max_drafts_per_run: 10     # safety cap on API calls per `draft` run
 
@@ -45,7 +47,7 @@ match:
 
 # The communities you work in, each with its own posting guidelines and, if you
 # want, its own match rules (which override the global `match:` defaults above).
-# The guidelines are notes for you (and, later, the Claude-API draft generator) —
+# The guidelines are notes for you (and the Gemini draft generator) —
 # they do not post anything on their own.
 subreddits:
   - name: "learnpython"

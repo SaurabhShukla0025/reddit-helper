@@ -2,6 +2,6 @@
 praw>=7.7,<8
 # Config files in YAML.
 PyYAML>=6,<7
-# Claude API, for drafting comments (step 3). The API key is read from the
-# ANTHROPIC_API_KEY environment variable, never from a config file.
-anthropic>=0.69
+# Gemini (Google) API, for drafting comments (step 3). The API key is read from
+# the GEMINI_API_KEY environment variable, never from a config file.
+google-genai>=1.0

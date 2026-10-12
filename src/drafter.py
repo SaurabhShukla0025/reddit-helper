@@ -1,14 +1,16 @@
-"""Drafts a review-queue comment for one post using the Claude API.
+"""Drafts a review-queue comment for one post using the Gemini (Google) API.
 
 The drafter never posts. It returns comment *text* that a human reviews later
 (step 4). `draft_comment` takes an already-built client so it can be tested with
-a fake - the only function that imports the Anthropic SDK is `make_client`.
+a fake - the only function that imports the Google GenAI SDK is `make_client`.
+The request `config` is passed as a plain dict (the SDK accepts one), so this
+module needs no SDK types and stays testable offline.
 """
 from __future__ import annotations
 
 import os
 
-from .config import ClaudeConfig
+from .config import GeminiConfig
 from .fetch import Post
 
 # Sentinel the model returns when a post is not worth a genuine comment.
@@ -30,11 +32,11 @@ SYSTEM_PROMPT = (
 
 
 class DraftError(RuntimeError):
-    """Raised when the model declines or returns nothing usable."""
+    """Raised when the model is blocked or returns nothing usable."""
 
 
 def render_prompt(post: Post, guidelines: str) -> str:
-    """The user-turn text for one post. Pure - no network, easy to test."""
+    """The prompt text for one post. Pure - no network, easy to test."""
     body = post.selftext.strip() or "(link/image post, no body text)"
     guide = guidelines.strip() or "(no specific guidelines provided)"
     return (
@@ -46,58 +48,51 @@ def render_prompt(post: Post, guidelines: str) -> str:
     )
 
 
-def _text_of(response) -> str:
-    """Joins the text blocks of a Messages response, ignoring thinking blocks."""
-    return "".join(
-        block.text for block in response.content
-        if getattr(block, "type", None) == "text"
-    ).strip()
-
-
-def draft_comment(client, post: Post, guidelines: str, cfg: ClaudeConfig) -> str | None:
+def draft_comment(client, post: Post, guidelines: str, cfg: GeminiConfig) -> str | None:
     """Returns a draft comment, or None when the model chose to skip the post.
 
-    Raises DraftError if the model refused on safety grounds or returned nothing.
+    Raises DraftError if the request was blocked (safety) or returned nothing.
     """
-    response = client.messages.create(
+    response = client.models.generate_content(
         model=cfg.model,
-        max_tokens=cfg.max_tokens,
-        thinking={"type": "adaptive"},
-        output_config={"effort": cfg.effort},
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": render_prompt(post, guidelines)}],
+        contents=render_prompt(post, guidelines),
+        config={
+            "system_instruction": SYSTEM_PROMPT,
+            "max_output_tokens": cfg.max_tokens,
+            "temperature": cfg.temperature,
+        },
     )
 
-    if getattr(response, "stop_reason", None) == "refusal":
-        details = getattr(response, "stop_details", None)
-        category = getattr(details, "category", None)
-        raise DraftError(f"the model declined this post (category: {category})")
+    feedback = getattr(response, "prompt_feedback", None)
+    block_reason = getattr(feedback, "block_reason", None)
+    if block_reason:
+        raise DraftError(f"the prompt was blocked (reason: {block_reason})")
 
-    text = _text_of(response)
+    text = (getattr(response, "text", None) or "").strip()
     if not text:
-        raise DraftError("the model returned an empty draft")
+        raise DraftError("the model returned an empty draft (possibly safety-filtered)")
     if text == SKIP:
         return None
     return text
 
 
 def make_client():
-    """Builds an authenticated Anthropic client, or exits with clear guidance.
+    """Builds a Gemini client, or exits with clear guidance.
 
     The API key comes from the environment, never from config.yaml.
     """
     try:
-        import anthropic
+        from google import genai
     except ImportError:
         raise SystemExit(
-            "The 'anthropic' package is not installed. Run:\n"
+            "The 'google-genai' package is not installed. Run:\n"
             "  pip install -r requirements.txt"
         )
 
-    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
         raise SystemExit(
-            "No Claude API key found. Set it before drafting:\n"
-            '  PowerShell:  $env:ANTHROPIC_API_KEY = "sk-ant-..."\n'
-            "Get a key at https://console.anthropic.com/"
+            "No Gemini API key found. Set it before drafting:\n"
+            '  PowerShell:  $env:GEMINI_API_KEY = "your-key"\n'
+            "Get a free key at https://aistudio.google.com/apikey"
         )
-    return anthropic.Anthropic()
+    return genai.Client()

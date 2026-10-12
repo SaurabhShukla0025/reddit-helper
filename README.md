@@ -11,6 +11,19 @@ This is a draft-and-approve assistant, not an unattended bot. It never posts
 without your approval, and it is meant for genuinely useful comments that follow
 each subreddit's rules.
 
+## 📚 Documentation
+
+New here? Start with the **[full documentation in `docs/`](docs/README.md)** —
+written so anyone can follow it:
+
+- **[Getting Started](docs/getting-started.md)** — install, get keys, first run
+- **[Commands](docs/commands.md)** — every command, with examples
+- **[Configuration](docs/configuration.md)** — every `config.yaml` setting
+- **[Architecture](docs/architecture.md)** — how the code and data flow work
+- **[Troubleshooting & Glossary](docs/troubleshooting.md)** — fixes + plain-English terms
+
+The rest of this README is a quick reference; `docs/` has the full detail.
+
 ## What it does (and the build order)
 
 1. **Authenticate + fetch** (done): log in with your Reddit app credentials and
@@ -18,7 +31,7 @@ each subreddit's rules.
 2. **Match worthwhile posts by your rules** (done): filter the fetched posts by
    keywords, score, comment count and age. Still read-only.
 3. **Draft comments into a review queue** (done): for each matched post, the
-   Claude API drafts a comment following that subreddit's guidelines and stores
+   Gemini API drafts a comment following that subreddit's guidelines and stores
    it as `pending` in a local SQLite queue. The model can decline low-value
    posts. Nothing is posted — drafts only.
 4. **You approve/edit** (done): walk the pending drafts one by one and approve,
@@ -65,20 +78,20 @@ only when you confirm.
    ```
    Both are read-only. Nothing is posted.
 
-6. **Draft comments (step 3) — needs a Claude API key:**
+6. **Draft comments (step 3) — needs a Gemini API key:**
    ```
    # PowerShell: set your key for this terminal session
-   $env:ANTHROPIC_API_KEY = "sk-ant-..."
+   $env:GEMINI_API_KEY = "your-key"
 
    python main.py draft           # draft comments for matched posts into the queue
    python main.py draft --limit 3  # cap how many drafts this run creates
    python main.py drafts          # show what's waiting in the review queue
    ```
-   `draft` calls the Claude API (which costs money per draft — hence the
-   `max_drafts_per_run` cap in `config.yaml` and the `--limit` flag). It only
+   `draft` calls the Gemini API (which has a free tier — the `max_drafts_per_run`
+   cap in `config.yaml` and the `--limit` flag keep usage in check). It only
    drafts posts that aren't already queued, and the model may decline posts it
    can't usefully answer. Still nothing is posted; drafts wait in the queue for
-   your approval (step 4). Get a key at https://console.anthropic.com/.
+   your approval (step 4). Get a free key at https://aistudio.google.com/apikey.
 
 7. **Approve or edit drafts (step 4):**
    ```
@@ -138,15 +151,15 @@ python -m pytest
 
 ## Files
 
-- `config.yaml` — your credentials, subreddits, guidelines, match rules and Claude/posting settings (you create it)
+- `config.yaml` — your credentials, subreddits, guidelines, match rules and Gemini/posting settings (you create it)
 - `queue.db` — the SQLite queue of drafts, their status and karma history (created on first `draft`; git-ignored)
 - `reddit-helper.log` — the rotating audit log of what the tool did (git-ignored)
 - `main.py` — the command-line entry point (`fetch`, `match`, `draft`, `drafts`, `review`, `post`, `karma`)
-- `src/config.py` — loads and validates the config, incl. match rules, Claude and posting settings
+- `src/config.py` — loads and validates the config, incl. match rules, Gemini and posting settings
 - `src/reddit_client.py` — logs in to the Reddit API
 - `src/fetch.py` — reads recent posts (read-only)
 - `src/match.py` — filters posts against each subreddit's rules (pure logic)
-- `src/drafter.py` — drafts a comment for one post via the Claude API
+- `src/drafter.py` — drafts a comment for one post via the Gemini API
 - `src/store.py` — the SQLite store (drafts, status, posted permalink, karma history)
 - `src/review.py` — the approve/reject/edit loop over pending drafts (pure of I/O)
 - `src/poster.py` — posts approved comments, paced and rate-limit aware (I/O injected)

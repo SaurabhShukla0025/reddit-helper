@@ -78,7 +78,7 @@ def cmd_match(args: list[str]) -> None:
 
 def cmd_draft(args: list[str]) -> None:
     config = load_config()
-    limit = _int_flag(args, "--limit", default=config.claude.max_drafts_per_run)
+    limit = _int_flag(args, "--limit", default=config.gemini.max_drafts_per_run)
 
     reddit, me = _sign_in(config)
     client = make_client()
@@ -86,7 +86,7 @@ def cmd_draft(args: list[str]) -> None:
     guidelines = {sub.name: sub.guidelines for sub in config.subreddits}
 
     print(
-        f"Signed in as u/{me}. Drafting with {config.claude.model} "
+        f"Signed in as u/{me}. Drafting with {config.gemini.model} "
         f"(up to {limit} new draft(s) this run). Nothing is posted.\n"
     )
 
@@ -102,7 +102,7 @@ def cmd_draft(args: list[str]) -> None:
             if drafted >= limit:
                 continue
             try:
-                comment = draft_comment(client, post, guidelines.get(name, ""), config.claude)
+                comment = draft_comment(client, post, guidelines.get(name, ""), config.gemini)
             except DraftError as error:
                 errors += 1
                 print(f"  ! r/{name} {post.title!r}: {error}")
@@ -114,7 +114,7 @@ def cmd_draft(args: list[str]) -> None:
                 conn,
                 post_id=post.id, subreddit=name, post_title=post.title,
                 post_url=post.url, post_author=post.author,
-                comment=comment, model=config.claude.model,
+                comment=comment, model=config.gemini.model,
             )
             drafted += 1
             print(f"  + r/{name} queued: {post.title}")

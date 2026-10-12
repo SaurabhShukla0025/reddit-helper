@@ -1,16 +1,16 @@
-"""Tests for the Claude-API drafter. A fake client stands in for the SDK, so
-these tests make no network calls and cost nothing."""
+"""Tests for the Gemini drafter. A fake client stands in for the SDK, so these
+tests make no network calls and cost nothing."""
 from __future__ import annotations
 
 from types import SimpleNamespace
 
 import pytest
 
-from src.config import ClaudeConfig
+from src.config import GeminiConfig
 from src.drafter import DraftError, SKIP, draft_comment, render_prompt
 from src.fetch import Post
 
-CFG = ClaudeConfig()
+CFG = GeminiConfig()
 
 
 def make_post(**over) -> Post:
@@ -30,23 +30,21 @@ def make_post(**over) -> Post:
 
 
 class FakeClient:
-    """Records the create() kwargs and returns a canned response."""
+    """Mimics genai.Client: records generate_content kwargs, returns a response."""
 
     def __init__(self, response):
         self._response = response
         self.calls: list[dict] = []
-        self.messages = SimpleNamespace(create=self._create)
+        self.models = SimpleNamespace(generate_content=self._generate)
 
-    def _create(self, **kwargs):
+    def _generate(self, **kwargs):
         self.calls.append(kwargs)
         return self._response
 
 
-def text_response(text: str, stop_reason: str = "end_turn"):
-    content = [SimpleNamespace(type="thinking", thinking="...")]
-    if text is not None:
-        content.append(SimpleNamespace(type="text", text=text))
-    return SimpleNamespace(content=content, stop_reason=stop_reason, stop_details=None)
+def resp(text, block_reason=None):
+    feedback = SimpleNamespace(block_reason=block_reason)
+    return SimpleNamespace(text=text, prompt_feedback=feedback)
 
 
 def test_render_prompt_includes_guidelines_title_and_body():
@@ -63,38 +61,34 @@ def test_render_prompt_handles_empty_body_and_guidelines():
     assert "(no specific guidelines provided)" in prompt
 
 
-def test_draft_comment_returns_text_and_skips_thinking_blocks():
-    client = FakeClient(text_response("Use json.load(open('data.json'))."))
+def test_draft_comment_returns_text():
+    client = FakeClient(resp("Use json.load(open('data.json'))."))
     result = draft_comment(client, make_post(), "Be concrete.", CFG)
     assert result == "Use json.load(open('data.json'))."
 
 
-def test_draft_comment_passes_model_and_effort():
-    client = FakeClient(text_response("ok"))
-    draft_comment(client, make_post(), "", ClaudeConfig(model="claude-opus-5-5", effort="low"))
+def test_draft_comment_passes_model_and_config():
+    client = FakeClient(resp("ok"))
+    draft_comment(client, make_post(), "", GeminiConfig(model="gemini-3.8-flash", temperature=0.4, max_tokens=800))
     call = client.calls[0]
-    assert call["model"] == "claude-opus-5-5"
-    assert call["output_config"] == {"effort": "low"}
-    assert call["thinking"] == {"type": "adaptive"}
+    assert call["model"] == "gemini-3.8-flash"
+    assert call["config"]["temperature"] == 0.4
+    assert call["config"]["max_output_tokens"] == 800
+    assert "system_instruction" in call["config"]
 
 
 def test_skip_sentinel_returns_none():
-    client = FakeClient(text_response(SKIP))
+    client = FakeClient(resp(SKIP))
     assert draft_comment(client, make_post(), "", CFG) is None
 
 
-def test_refusal_raises_drafterror():
-    response = SimpleNamespace(
-        content=[],
-        stop_reason="refusal",
-        stop_details=SimpleNamespace(category="cyber", explanation="no"),
-    )
-    client = FakeClient(response)
-    with pytest.raises(DraftError, match="declined"):
+def test_blocked_prompt_raises_drafterror():
+    client = FakeClient(resp(None, block_reason="SAFETY"))
+    with pytest.raises(DraftError, match="blocked"):
         draft_comment(client, make_post(), "", CFG)
 
 
 def test_empty_text_raises_drafterror():
-    client = FakeClient(text_response("   "))  # whitespace only -> empty after strip
+    client = FakeClient(resp("   "))  # whitespace only -> empty after strip
     with pytest.raises(DraftError, match="empty"):
         draft_comment(client, make_post(), "", CFG)
