@@ -23,7 +23,8 @@ fetch:
   limit: 10
 
 gemini:
-  model: "gemini-3.8-flash"             # verify model availability with the authorized provider
+  model: "gemini-flash-latest"          # alias that always maps to the current Flash model
+                                        # (or pin one, e.g. "gemini-2.5-flash", if yours requires it)
   temperature: 0.7
   max_tokens: 1024
   max_drafts_per_run: 10                # hard cap on calls, including declines/errors

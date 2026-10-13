@@ -45,7 +45,8 @@ def require_community(sub: Subreddit, *, comments: bool = False) -> None:
 
 def require_external_ai(p: PolicyConfig) -> None:
     if not p.external_ai_approval_reference or not p.provider_data_use_reviewed:
-        raise SystemExit("Gemini drafting blocked: record explicit authorization for third-party AI processing and review provider data use")
+        raise SystemExit("Gemini drafting blocked: record explicit authorization for "
+                         "third-party AI processing and review provider data use")
 
 
 def require_post(config: Config, subreddit: str) -> None:

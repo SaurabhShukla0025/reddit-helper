@@ -1,23 +1,24 @@
 """Command-line entry point for Reddit Helper.
 
-Usage:
-    python main.py fetch          # log in and list recent posts (read-only)
-    python main.py match          # list only the posts that pass your match rules
-    python main.py match --all    # also show skipped posts and why
-    python main.py draft          # draft comments for matched posts into the queue
-    python main.py draft --limit N  # cap how many drafts this run creates
-    python main.py drafts         # show what's waiting in the review queue
-    python main.py review         # approve / reject / edit pending drafts
-    python main.py post           # post approved comments to Reddit (asks first)
-    python main.py karma          # read and record your posted comments' scores
+Commands (run `python main.py <command> --help` for each one's options):
+    fetch     log in and list recent posts (read-only)
+    match     list the posts that pass your match rules (read-only)
+    draft     draft comments for matched posts into the queue
+    drafts    show what's waiting in the review queue
+    review    approve / reject / edit pending drafts
+    post      post approved comments to Reddit (asks first)
+    karma     read and record your posted comments' scores
+    cleanup   retention cleanup and data-deletion requests
+
+Add --verbose (-v) to any command to echo the activity log to the console.
 """
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import shlex
 import subprocess
-import sys
 import tempfile
 
 from src import applog, karma, lifecycle, policy, poster, review, store
@@ -25,7 +26,8 @@ from src.config import Config, load_config
 from src.drafter import draft_comment, make_client
 from src.fetch import fetch_all
 from src.match import MatchResult, match_all
-from src.reddit_client import make_client as make_reddit, whoami
+from src.reddit_client import make_client as make_reddit
+from src.reddit_client import whoami
 
 log = logging.getLogger(__name__)
 
@@ -46,8 +48,9 @@ def _sign_in(config: Config):
 
 def _queue():
     """Local cleanup commands work without credentials or API approval."""
-    from src.config import CONFIG_PATH, _policy_config
     import yaml
+
+    from src.config import CONFIG_PATH, _policy_config
     settings = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) if CONFIG_PATH.exists() else {}
     retention = _policy_config((settings or {}).get("policy") or {}).retention_days
     return store.connect(retention_days=retention)
@@ -60,24 +63,22 @@ def _refresh_queue(conn, config, reddit):
         print(f"Removed {len(before) - len(valid)} stale, changed, legacy, or out-of-scope record(s).")
 
 
-def cmd_cleanup(args):
+def cmd_cleanup(sync: bool = False, post_id: str | None = None, all_: bool = False) -> None:
     conn = _queue()
-    if "--post-id" in args:
-        index = args.index("--post-id")
-        if index + 1 >= len(args) or args[index + 1].startswith("--"):
-            raise SystemExit("cleanup --post-id needs a Reddit submission ID")
-        store.forget(conn, args[index + 1])
+    if post_id is not None:
+        store.forget(conn, post_id)
         print("Removed the specified post's local draft, metadata, and score history.")
-    elif "--all" in args:
+    elif all_:
         for draft in store.list_drafts(conn):
             store.forget(conn, draft.post_id)
         print("Removed all locally queued content and score history.")
-    elif "--sync" in args:
+    elif sync:
         config = load_config()
         reddit, _ = _sign_in(config)
         _refresh_queue(conn, config, reddit)
     else:
-        print("Retention cleanup complete. Use --sync to check Reddit deletions, --post-id ID for a deletion request, or --all when stopping the app.")
+        print("Retention cleanup complete. Use --sync to check Reddit deletions, "
+              "--post-id ID for a deletion request, or --all when stopping the app.")
     conn.close()
 
 
@@ -94,8 +95,7 @@ def cmd_fetch() -> None:
         print()
 
 
-def cmd_match(args: list[str]) -> None:
-    show_all = "--all" in args
+def cmd_match(show_all: bool = False) -> None:
     config = load_config()
     reddit, me = _sign_in(config)
     print(f"Signed in as u/{me}. Matching {config.listing} posts (read-only).\n")
@@ -116,10 +116,11 @@ def cmd_match(args: list[str]) -> None:
     print(f"{total_matched} post(s) matched across {len(results)} subreddit(s).")
 
 
-def cmd_draft(args: list[str]) -> None:
+def cmd_draft(limit: int | None = None) -> None:
     config = load_config()
-    limit = min(_int_flag(args, "--limit", default=config.gemini.max_drafts_per_run), config.gemini.max_drafts_per_run)
-    policy.require_api(config)
+    cap = config.gemini.max_drafts_per_run
+    limit = cap if limit is None else min(limit, cap)
+    # _sign_in enforces require_api; here add the draft-specific gates.
     policy.require_external_ai(config.policy)
     for sub in config.subreddits:
         policy.require_community(sub, comments=True)
@@ -231,12 +232,12 @@ def cmd_review() -> None:
         print("Approved drafts are ready to post - that's step 5.")
 
 
-def cmd_post(args: list[str]) -> None:
-    if "--yes" in args or "-y" in args:
+def cmd_post(limit: int | None = None, dry_run: bool = False, yes: bool = False) -> None:
+    if yes:
         raise SystemExit("--yes is no longer supported; live posting requires human confirmation")
     config = load_config()
-    limit = min(_int_flag(args, "--limit", default=config.post.max_posts_per_run), config.post.max_posts_per_run)
-    dry_run = "--dry-run" in args
+    cap = config.post.max_posts_per_run
+    limit = cap if limit is None else min(limit, cap)
 
     conn = _queue()
     approved = store.list_drafts(conn, status=store.STATUS_APPROVED)
@@ -245,7 +246,8 @@ def cmd_post(args: list[str]) -> None:
         return
     batch = approved[:limit]
     if dry_run:
-        print(f"Dry run: {len(batch)} approved record(s) selected; no network or posting. Content is hidden until source verification. Live permission checks still apply.")
+        print(f"Dry run: {len(batch)} approved record(s) selected; no network or posting. "
+              "Content is hidden until source verification. Live permission checks still apply.")
         return
     for draft in batch:
         policy.require_post(config, draft.subreddit)
@@ -259,7 +261,8 @@ def cmd_post(args: list[str]) -> None:
         policy.require_post(config, draft.subreddit)
         if not draft.comment.rstrip().endswith(policy.AI_DISCLOSURE):
             store.set_status(conn, draft.post_id, store.STATUS_PENDING)
-            raise SystemExit("Draft lacks AI disclosure; returned to review. Add the required disclosure and approve again.")
+            raise SystemExit("Draft lacks AI disclosure; returned to review. "
+                             "Add the required disclosure and approve again.")
 
     print(f"{len(approved)} approved draft(s); will post up to {len(batch)} this run:\n")
     for draft in batch:
@@ -269,7 +272,8 @@ def cmd_post(args: list[str]) -> None:
     print()
 
     if not _confirm(
-        f"Have you checked accuracy, current community rules, relevance, and disclosure for these {len(batch)} comment(s)? Publish as u/{me}? [y/N]: "
+        f"Have you checked accuracy, current community rules, relevance, and disclosure "
+        f"for these {len(batch)} comment(s)? Publish as u/{me}? [y/N]: "
     ):
         print("Aborted. Nothing was posted.")
         return
@@ -370,52 +374,78 @@ def _print_verdict(verdict: MatchResult, prefix: str) -> None:
     print(f"        {post.url}")
 
 
-def _int_flag(args: list[str], name: str, default: int) -> int:
-    """Reads `--flag N` from args, falling back to `default`."""
-    if name not in args:
-        return default
-    index = args.index(name)
-    if index + 1 >= len(args):
-        raise SystemExit(f"{name} needs a number, e.g. {name} 5")
+def _positive_int(text: str) -> int:
+    """An argparse type that accepts only whole numbers >= 1."""
     try:
-        value = int(args[index + 1])
+        value = int(text)
     except ValueError:
-        raise SystemExit(f"{name} needs a number, e.g. {name} 5")
+        raise argparse.ArgumentTypeError("must be a whole number")
     if value < 1:
-        raise SystemExit(f"{name} must be at least 1")
+        raise argparse.ArgumentTypeError("must be at least 1")
     return value
 
 
-def main() -> None:
-    args = sys.argv[1:]
-    command = args[0] if args else None
-    applog.setup_logging(verbose="--verbose" in args or "-v" in args)
-    if command:
-        log.info("command: %s", " ".join(args))
+def _build_parser() -> argparse.ArgumentParser:
+    """The command-line interface: subcommands, flags, and auto-generated help."""
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("-v", "--verbose", action="store_true",
+                        help="echo the activity log to the console")
 
-    if command == "fetch":
+    parser = argparse.ArgumentParser(
+        prog="python main.py", parents=[common],
+        description="Approve-first Reddit contribution assistant (read -> match -> "
+                    "draft -> review -> post -> karma).",
+    )
+    sub = parser.add_subparsers(dest="command", metavar="command", required=True)
+
+    sub.add_parser("fetch", parents=[common], help="list recent posts (read-only)")
+
+    p_match = sub.add_parser("match", parents=[common], help="list posts that pass your rules (read-only)")
+    p_match.add_argument("--all", action="store_true", help="also show skipped posts and why")
+
+    p_draft = sub.add_parser("draft", parents=[common], help="draft comments into the review queue")
+    p_draft.add_argument("--limit", type=_positive_int, metavar="N", help="cap new drafts this run")
+
+    sub.add_parser("drafts", parents=[common], help="show the review queue")
+    sub.add_parser("review", parents=[common], help="approve / reject / edit pending drafts")
+
+    p_post = sub.add_parser("post", parents=[common], help="post approved comments to Reddit (asks first)")
+    p_post.add_argument("--limit", type=_positive_int, metavar="N", help="post at most N this run")
+    p_post.add_argument("--dry-run", action="store_true", help="preview only; posts nothing, no login")
+    p_post.add_argument("--yes", "-y", action="store_true", help=argparse.SUPPRESS)
+
+    sub.add_parser("karma", parents=[common], help="read and record posted comments' scores")
+
+    p_clean = sub.add_parser("cleanup", parents=[common], help="retention cleanup and deletion requests")
+    group = p_clean.add_mutually_exclusive_group()
+    group.add_argument("--sync", action="store_true", help="check Reddit for deleted/changed sources")
+    group.add_argument("--post-id", metavar="ID", help="delete one post's local data")
+    group.add_argument("--all", action="store_true", help="delete all local data (e.g. when stopping)")
+
+    return parser
+
+
+def main() -> None:
+    args = _build_parser().parse_args()
+    applog.setup_logging(verbose=args.verbose)
+    log.info("command: %s", args.command)
+
+    if args.command == "fetch":
         cmd_fetch()
-    elif command == "match":
-        cmd_match(args[1:])
-    elif command == "draft":
-        cmd_draft(args[1:])
-    elif command == "drafts":
+    elif args.command == "match":
+        cmd_match(show_all=args.all)
+    elif args.command == "draft":
+        cmd_draft(limit=args.limit)
+    elif args.command == "drafts":
         cmd_drafts()
-    elif command == "review":
+    elif args.command == "review":
         cmd_review()
-    elif command == "post":
-        cmd_post(args[1:])
-    elif command == "karma":
+    elif args.command == "post":
+        cmd_post(limit=args.limit, dry_run=args.dry_run, yes=args.yes)
+    elif args.command == "karma":
         cmd_karma()
-    elif command == "cleanup":
-        cmd_cleanup(args[1:])
-    else:
-        print(
-            "Usage: python main.py fetch | match [--all] | draft [--limit N] | "
-            "drafts | review | post [--limit N] [--dry-run] | karma | cleanup [--sync | --post-id ID | --all]\n"
-            "  (add --verbose to echo the log to the console)"
-        )
-        raise SystemExit(1)
+    elif args.command == "cleanup":
+        cmd_cleanup(sync=args.sync, post_id=args.post_id, all_=args.all)
 
 
 if __name__ == "__main__":

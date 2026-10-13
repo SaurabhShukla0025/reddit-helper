@@ -5,7 +5,16 @@ import pytest
 
 import main
 from src import lifecycle, policy, store
-from src.config import Config, GeminiConfig, MatchRules, PolicyConfig, PostConfig, RedditCreds, Subreddit, _policy_config
+from src.config import (
+    Config,
+    GeminiConfig,
+    MatchRules,
+    PolicyConfig,
+    PostConfig,
+    RedditCreds,
+    Subreddit,
+    _policy_config,
+)
 
 
 def authorized():
@@ -216,7 +225,7 @@ def test_post_confirmation_declined_never_submits(conn, monkeypatch):
     monkeypatch.setattr(main, "_sign_in", lambda _: (SimpleNamespace(submission=lambda **_: source()), "testapp"))
     monkeypatch.setattr(main, "_confirm", lambda _: False)
     monkeypatch.setattr(main.poster, "run_posts", lambda *args, **kwargs: pytest.fail("must not publish"))
-    main.cmd_post([])
+    main.cmd_post()
     assert store.list_drafts(conn)[0].status == store.STATUS_APPROVED
 
 
@@ -231,7 +240,7 @@ def test_post_cli_cannot_raise_configured_cap(conn, monkeypatch):
     monkeypatch.setattr(main, "_confirm", lambda _: True)
     calls = []
     monkeypatch.setattr(main.poster, "submit_comment", lambda *args: calls.append(args) or "posted-url")
-    main.cmd_post(["--limit", "100"])
+    main.cmd_post(limit=100)
     assert len(calls) == 1
     assert len(store.list_drafts(conn, store.STATUS_POSTED)) == 1
 
@@ -250,7 +259,7 @@ def test_retention_deletes_old_data_without_extending_on_score_update(conn):
 def test_noninteractive_post_flag_rejected_before_loading_config(monkeypatch):
     monkeypatch.setattr(main, "load_config", lambda: pytest.fail("no config or network needed"))
     with pytest.raises(SystemExit, match="human confirmation"):
-        main.cmd_post(["--yes"])
+        main.cmd_post(yes=True)
 
 
 def test_offline_preview_hides_unverified_source_content(conn, monkeypatch, capsys):
@@ -258,7 +267,7 @@ def test_offline_preview_hides_unverified_source_content(conn, monkeypatch, caps
     monkeypatch.setattr(main, "load_config", authorized)
     monkeypatch.setattr(main, "_queue", lambda: conn)
     monkeypatch.setattr(main, "_sign_in", lambda _: pytest.fail("must stay offline"))
-    main.cmd_post(["--dry-run"])
+    main.cmd_post(dry_run=True)
     output = capsys.readouterr().out
     assert "Dry run" in output
     assert "Question" not in output and "Answer" not in output
@@ -276,5 +285,5 @@ def test_drafting_limit_counts_declines_and_cannot_exceed_config(conn, monkeypat
     monkeypatch.setattr(main, "fetch_all", lambda *_: {"learnpython": posts})
     calls = []
     monkeypatch.setattr(main, "draft_comment", lambda *args, **kwargs: calls.append(args) or None)
-    main.cmd_draft(["--limit", "100"])
+    main.cmd_draft(limit=100)
     assert len(calls) == 2

@@ -1,0 +1,21 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# A sensible default: pycodestyle errors/warnings, pyflakes, and import sorting.
+select = ["E", "F", "W", "I"]
+# E731 (no lambda assignment) is a style preference; lambdas read fine in tests.
+ignore = ["E731"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests favour compact, readable one-liners over strict line length.
+"tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+# Third-party libs (praw, google-genai, yaml) ship limited/no stubs; don't fail on them.
+ignore_missing_imports = true
+# Lenient: this is a small app, not every helper is fully annotated.
+check_untyped_defs = true
+warn_unused_ignores = false

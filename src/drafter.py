@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import os
 
-from .config import GeminiConfig
+from .config import GeminiConfig, PolicyConfig
 from .fetch import Post
-from .config import PolicyConfig
 from .policy import disclosed, require_external_ai
 
 # Sentinel the model returns when a post is not worth a genuine comment.

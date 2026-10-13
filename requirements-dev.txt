@@ -1,3 +1,5 @@
 # Development/test dependencies. Install with: pip install -r requirements-dev.txt
 -r requirements.txt
 pytest>=8,<9
+ruff>=0.6          # linter + formatter
+mypy>=1.11         # static type checker

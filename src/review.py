@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from . import store
-from .store import Draft
 from .policy import disclosed
+from .store import Draft
 
 # Reviewer actions.
 APPROVE = "approve"

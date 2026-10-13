@@ -12,3 +12,6 @@ __pycache__/
 *.db
 *.log
 *.log.*
+
+# Local throwaway test script (not for the public repo)
+try_gemini.py

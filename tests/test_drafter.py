@@ -2,15 +2,16 @@
 tests make no network calls and cost nothing."""
 from __future__ import annotations
 
-from types import SimpleNamespace
 from functools import partial
+from types import SimpleNamespace
 
 import pytest
 
 from src.config import GeminiConfig, PolicyConfig
-from src.drafter import DraftError, SKIP, draft_comment as unchecked_draft, render_prompt
-from src.policy import disclosed
+from src.drafter import SKIP, DraftError, render_prompt
+from src.drafter import draft_comment as unchecked_draft
 from src.fetch import Post
+from src.policy import disclosed
 
 CFG = GeminiConfig()
 draft_comment = partial(unchecked_draft, policy=PolicyConfig(

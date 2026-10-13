@@ -68,7 +68,7 @@ class GeminiConfig:
     environment variable so no secret lands in a file.
     """
 
-    model: str = "gemini-3.8-flash"
+    model: str = "gemini-flash-latest"
     temperature: float = 0.7
     max_tokens: int = 1024
     max_drafts_per_run: int = 10
@@ -136,13 +136,20 @@ def _match_rules(raw: dict, base: MatchRules) -> MatchRules:
     if unknown:
         raise SystemExit(f"config.yaml: unknown match keys: {', '.join(sorted(unknown))}")
 
+    def required_int(key: str, fallback: int) -> int:
+        """A non-optional int field, falling back when absent or null."""
+        if key not in raw:
+            return fallback
+        value = _as_int(raw[key], f"match.{key}")
+        return fallback if value is None else value
+
     return replace(
         base,
         keywords=_as_terms(raw["keywords"]) if "keywords" in raw else base.keywords,
         exclude=_as_terms(raw["exclude"]) if "exclude" in raw else base.exclude,
-        min_score=_as_int(raw["min_score"], "match.min_score") if "min_score" in raw else base.min_score,
+        min_score=required_int("min_score", base.min_score),
         max_score=_as_int(raw["max_score"], "match.max_score") if "max_score" in raw else base.max_score,
-        min_comments=_as_int(raw["min_comments"], "match.min_comments") if "min_comments" in raw else base.min_comments,
+        min_comments=required_int("min_comments", base.min_comments),
         max_comments=_as_int(raw["max_comments"], "match.max_comments") if "max_comments" in raw else base.max_comments,
         max_age_hours=_as_hours(raw["max_age_hours"]) if "max_age_hours" in raw else base.max_age_hours,
     )
@@ -211,7 +218,7 @@ def _policy_config(raw: dict) -> PolicyConfig:
     unknown = set(raw) - set(PolicyConfig.__dataclass_fields__)
     if unknown:
         raise SystemExit(f"config.yaml: unknown policy keys: {', '.join(sorted(unknown))}")
-    values = {}
+    values: dict[str, object] = {}
     for key in PolicyConfig.__dataclass_fields__:
         if key not in raw:
             continue
@@ -224,7 +231,7 @@ def _policy_config(raw: dict) -> PolicyConfig:
             values[key] = value
         else:
             values[key] = str(raw[key] or "").strip()
-    return PolicyConfig(**values)
+    return PolicyConfig(**values)  # type: ignore[arg-type]
 
 
 def _post_config(raw: dict) -> PostConfig:
@@ -238,6 +245,7 @@ def _post_config(raw: dict) -> PostConfig:
         if raw.get(key) is None:
             return fallback
         value = _as_int(raw[key], f"post.{key}")
+        assert value is not None  # not None: raw.get(key) checked above
         if value < 0:
             raise SystemExit(f"config.yaml: post.{key} must be 0 or more, got {value}")
         return value
@@ -280,6 +288,7 @@ def _gemini_config(raw: dict) -> GeminiConfig:
         if raw.get(key) is None:
             return fallback
         value = _as_int(raw[key], f"gemini.{key}")
+        assert value is not None  # not None: raw.get(key) checked above
         if value < 1:
             raise SystemExit(f"config.yaml: gemini.{key} must be at least 1, got {value}")
         return value
