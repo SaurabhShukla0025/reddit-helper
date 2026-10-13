@@ -13,6 +13,7 @@ from typing import Callable
 
 from . import store
 from .store import Draft
+from .policy import disclosed
 
 # Reviewer actions.
 APPROVE = "approve"
@@ -60,7 +61,9 @@ def run_review(
     total = len(pending)
 
     for index, draft in enumerate(pending, start=1):
-        comment = draft.comment
+        comment = disclosed(draft.comment)
+        if comment != draft.comment:
+            store.update_comment(conn, draft.post_id, comment)
         while True:
             out(render_draft(_with_comment(draft, comment), index, total))
             action = prompt(_with_comment(draft, comment))
@@ -76,7 +79,8 @@ def run_review(
                 summary.remaining -= 1
                 break
             if action == EDIT:
-                new_comment = edit(comment).strip()
+                edited = edit(comment).strip()
+                new_comment = disclosed(edited) if edited else comment
                 if new_comment and new_comment != comment:
                     store.update_comment(conn, draft.post_id, new_comment)
                     comment = new_comment

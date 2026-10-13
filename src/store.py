@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "queue.db"
@@ -67,6 +67,7 @@ class Draft:
     created_at: str
     updated_at: str
     posted_url: str | None = None
+    source_hash: str | None = None
 
 
 @dataclass
@@ -79,14 +80,16 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
+def connect(path: Path | str = DB_PATH, *, retention_days: int = 30) -> sqlite3.Connection:
     """Opens the queue database and ensures the schema is current."""
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA secure_delete = ON")
     conn.execute(_SCHEMA)
     conn.executescript(_KARMA_SCHEMA)
     _migrate(conn)
     conn.commit()
+    prune(conn, retention_days)
     return conn
 
 
@@ -95,6 +98,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(drafts)")}
     if "posted_url" not in columns:
         conn.execute("ALTER TABLE drafts ADD COLUMN posted_url TEXT")
+    if "source_hash" not in columns:
+        conn.execute("ALTER TABLE drafts ADD COLUMN source_hash TEXT")
 
 
 def has_draft(conn: sqlite3.Connection, post_id: str) -> bool:
@@ -114,6 +119,7 @@ def add_draft(
     comment: str,
     model: str,
     status: str = STATUS_PENDING,
+    source_hash: str | None = None,
 ) -> Draft:
     """Inserts one pending draft and returns it."""
     now = _now()
@@ -121,17 +127,18 @@ def add_draft(
         """
         INSERT INTO drafts (
             post_id, subreddit, post_title, post_url, post_author,
-            comment, status, model, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            comment, status, model, created_at, updated_at, source_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (post_id, subreddit, post_title, post_url, post_author,
-         comment, status, model, now, now),
+         comment, status, model, now, now, source_hash),
     )
     conn.commit()
     return Draft(
         post_id=post_id, subreddit=subreddit, post_title=post_title,
         post_url=post_url, post_author=post_author, comment=comment,
         status=status, model=model, created_at=now, updated_at=now,
+        source_hash=source_hash,
     )
 
 
@@ -205,3 +212,22 @@ def count_by_status(conn: sqlite3.Connection) -> dict[str, int]:
         "SELECT status, COUNT(*) AS n FROM drafts GROUP BY status"
     ).fetchall()
     return {row["status"]: row["n"] for row in rows}
+
+
+def forget(conn: sqlite3.Connection, post_id: str) -> None:
+    """Delete a source post's stored metadata, drafts, and score history."""
+    with conn:
+        conn.execute("DELETE FROM karma WHERE post_id = ?", (post_id,))
+        conn.execute("DELETE FROM drafts WHERE post_id = ?", (post_id,))
+
+
+def prune(conn: sqlite3.Connection, retention_days: int = 30) -> int:
+    if isinstance(retention_days, bool) or not 1 <= retention_days <= 30:
+        raise ValueError("retention_days must be between 1 and 30")
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat(timespec="seconds")
+    stale = conn.execute("SELECT post_id FROM drafts WHERE created_at < ?", (cutoff,)).fetchall()
+    with conn:
+        conn.executemany("DELETE FROM karma WHERE post_id = ?", [(r["post_id"],) for r in stale])
+        conn.executemany("DELETE FROM drafts WHERE post_id = ?", [(r["post_id"],) for r in stale])
+        conn.execute("DELETE FROM karma WHERE post_id NOT IN (SELECT post_id FROM drafts)")
+    return len(stale)

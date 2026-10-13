@@ -7,6 +7,7 @@ from __future__ import annotations
 import pytest
 
 from src import review, store
+from src.policy import disclosed
 
 
 @pytest.fixture
@@ -85,7 +86,7 @@ def test_edit_then_approve_updates_comment_and_status(conn):
     assert summary.edited == 1
     assert summary.approved == 1
     draft = store.get_draft(conn, "t3_1")
-    assert draft.comment == "edited comment text"
+    assert draft.comment == disclosed("edited comment text")
     assert draft.status == store.STATUS_APPROVED
 
 

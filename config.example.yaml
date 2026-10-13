@@ -1,68 +1,57 @@
-# Copy this file to config.yaml and fill it in. config.yaml is git-ignored.
-
-# From https://www.reddit.com/prefs/apps (a "script" type app).
+# Copy to config.yaml. Never paste real credentials into chat or commit them.
+# Empty permission references deliberately block live operation.
 reddit:
   client_id: "YOUR_CLIENT_ID"
   client_secret: "YOUR_CLIENT_SECRET"
   username: "YOUR_REDDIT_USERNAME"
   password: "YOUR_REDDIT_PASSWORD"
-  # A clear, honest User-Agent is required by Reddit. Put your real username.
-  user_agent: "reddit-helper/0.1 by u/YOUR_REDDIT_USERNAME"
+  user_agent: "contribution-helper/0.2 by u/YOUR_REDDIT_USERNAME"
 
-# How many posts to read per subreddit, and which listing.
+policy:
+  api_approval_reference: ""           # real Reddit approval covering this use case
+  app_registration_reference: ""       # developer/app registration and profile label
+  dedicated_app_username: ""           # account used solely for app functions
+  privacy_policy_reviewed: false        # customize PRIVACY.md before setting true
+  data_security_reviewed: false         # secure credentials, OS encryption and access
+  deletion_contact: ""                 # real accessible channel for deletion requests
+  external_ai_approval_reference: ""    # explicit permission to send Reddit text to Google
+  provider_data_use_reviewed: false     # permitted retention/use; no unauthorized training
+  retention_days: 30                    # 1-30; shorten to match actual approval
+
 fetch:
-  listing: "new"      # new | rising | hot
+  listing: "new"                       # new | rising | hot
   limit: 10
 
-# Comment drafting (step 3) uses the Gemini (Google) API. The API key is NOT set
-# here — it is read from the GEMINI_API_KEY environment variable so no secret
-# lands in a file. Get a free key at https://aistudio.google.com/apikey.
-# All fields below are optional and shown with their defaults.
 gemini:
-  model: "gemini-3.8-flash"  # which Gemini model drafts comments
-                             # (cheaper option: "gemini-3.5-flash-lite")
-  temperature: 0.7           # 0 = focused/consistent, up to 2 = more varied
-  max_tokens: 1024           # cap per draft (comments are short)
-  max_drafts_per_run: 10     # safety cap on API calls per `draft` run
+  model: "gemini-3.8-flash"             # verify model availability with the authorized provider
+  temperature: 0.7
+  max_tokens: 1024
+  max_drafts_per_run: 10                # hard cap on calls, including declines/errors
 
-# Posting approved comments (step 5). Posts are paced like a human: a random
-# pause in [min_delay_seconds, max_delay_seconds] between each post. All optional,
-# shown with their defaults.
 post:
-  min_delay_seconds: 300     # shortest pause between posts
-  max_delay_seconds: 900     # longest pause (random within the range)
-  max_posts_per_run: 5       # safety cap on posts per `post` run
+  min_delay_seconds: 300               # load-control pauses; not identity masking
+  max_delay_seconds: 900
+  max_posts_per_run: 5                 # hard per-run cap, no confirmation bypass
 
-# Global match defaults. A post matches when EVERY gate below passes. Each
-# subreddit can override any of these under its own `match:` block. Leave a
-# list empty or a bound unset to disable that gate.
 match:
-  keywords: []          # match only posts whose title/body contain ANY of these (empty = any post)
-  exclude: []           # skip posts whose title/body contain ANY of these
-  min_score: 0          # skip posts below this score
-  max_score: null        # or above this score (null = no upper limit)
-  min_comments: 0       # skip posts with fewer comments than this
-  max_comments: null     # or more comments than this (null = no upper limit)
-  max_age_hours: 48     # skip posts older than this many hours (null = no limit)
+  keywords: []
+  exclude: []
+  min_score: 0
+  max_score: null
+  min_comments: 0
+  max_comments: null
+  max_age_hours: 48
 
-# The communities you work in, each with its own posting guidelines and, if you
-# want, its own match rules (which override the global `match:` defaults above).
-# The guidelines are notes for you (and the Gemini draft generator) —
-# they do not post anything on their own.
+# Examples only; these communities have NOT been verified or authorized here.
 subreddits:
   - name: "learnpython"
+    access_reference: ""                # permitted community scope in API approval
+    comments_reference: ""              # current rule/moderator permission for app replies
+    ai_comments_allowed: false           # only true if disclosed AI replies are permitted
+    rules_reviewed_on: ""                # YYYY-MM-DD, refresh at least every 30 days
     guidelines: >
-      Answer only beginner questions you can help with. Be concrete, give a short
-      code example. No self-promotion. Match the friendly, patient tone.
+      Answer only questions you can accurately help with. Be specific and patient.
+      Do not invent personal experience. No promotion or sensitive user profiling.
     match:
       keywords: ["how do i", "error", "typeerror", "beginner", "help"]
       exclude: ["hiring", "job"]
-      max_comments: 5     # get in early, before the thread is answered
-
-  - name: "smallbusiness"
-    guidelines: >
-      Share real experience on procurement or software choices. No links to your
-      own product. Keep it practical and specific.
-    match:
-      keywords: ["software", "tool", "recommend", "procurement", "vendor"]
-      min_score: 2

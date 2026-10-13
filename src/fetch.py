@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import praw
 
 from .config import Config, Subreddit
+from .lifecycle import available
 
 
 @dataclass
@@ -34,6 +35,8 @@ def fetch_subreddit(reddit: praw.Reddit, sub: Subreddit, which: str, limit: int)
     """One subreddit's recent posts, newest listing by default."""
     posts: list[Post] = []
     for s in _listing(reddit, sub.name, which, limit):
+        if not available(s):
+            continue
         posts.append(
             Post(
                 id=s.id,

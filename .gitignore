@@ -6,7 +6,9 @@ config.yaml
 __pycache__/
 *.pyc
 .pytest_cache/
+.test-temp-policy/
 
 # Local database and logs (added in later steps)
 *.db
 *.log
+*.log.*

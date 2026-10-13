@@ -20,9 +20,9 @@ import subprocess
 import sys
 import tempfile
 
-from src import applog, karma, poster, review, store
+from src import applog, karma, lifecycle, policy, poster, review, store
 from src.config import Config, load_config
-from src.drafter import DraftError, draft_comment, make_client
+from src.drafter import draft_comment, make_client
 from src.fetch import fetch_all
 from src.match import MatchResult, match_all
 from src.reddit_client import make_client as make_reddit, whoami
@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 
 
 def _sign_in(config: Config):
+    policy.require_api(config)
     reddit = make_reddit(config.reddit)
     try:
         me = whoami(reddit)
@@ -38,7 +39,46 @@ def _sign_in(config: Config):
         log.error("Reddit sign-in failed: %s", error)
         raise SystemExit(f"Could not sign in to Reddit: {error}")
     log.info("signed in as u/%s", me)
+    if me.casefold() != config.policy.dedicated_app_username.casefold():
+        raise SystemExit("Authenticated account does not match the dedicated app account")
     return reddit, me
+
+
+def _queue():
+    """Local cleanup commands work without credentials or API approval."""
+    from src.config import CONFIG_PATH, _policy_config
+    import yaml
+    settings = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) if CONFIG_PATH.exists() else {}
+    retention = _policy_config((settings or {}).get("policy") or {}).retention_days
+    return store.connect(retention_days=retention)
+
+
+def _refresh_queue(conn, config, reddit):
+    before = store.list_drafts(conn)
+    valid = lifecycle.refresh(conn, reddit, before, config)
+    if len(valid) != len(before):
+        print(f"Removed {len(before) - len(valid)} stale, changed, legacy, or out-of-scope record(s).")
+
+
+def cmd_cleanup(args):
+    conn = _queue()
+    if "--post-id" in args:
+        index = args.index("--post-id")
+        if index + 1 >= len(args) or args[index + 1].startswith("--"):
+            raise SystemExit("cleanup --post-id needs a Reddit submission ID")
+        store.forget(conn, args[index + 1])
+        print("Removed the specified post's local draft, metadata, and score history.")
+    elif "--all" in args:
+        for draft in store.list_drafts(conn):
+            store.forget(conn, draft.post_id)
+        print("Removed all locally queued content and score history.")
+    elif "--sync" in args:
+        config = load_config()
+        reddit, _ = _sign_in(config)
+        _refresh_queue(conn, config, reddit)
+    else:
+        print("Retention cleanup complete. Use --sync to check Reddit deletions, --post-id ID for a deletion request, or --all when stopping the app.")
+    conn.close()
 
 
 def cmd_fetch() -> None:
@@ -78,11 +118,16 @@ def cmd_match(args: list[str]) -> None:
 
 def cmd_draft(args: list[str]) -> None:
     config = load_config()
-    limit = _int_flag(args, "--limit", default=config.gemini.max_drafts_per_run)
+    limit = min(_int_flag(args, "--limit", default=config.gemini.max_drafts_per_run), config.gemini.max_drafts_per_run)
+    policy.require_api(config)
+    policy.require_external_ai(config.policy)
+    for sub in config.subreddits:
+        policy.require_community(sub, comments=True)
 
     reddit, me = _sign_in(config)
     client = make_client()
-    conn = store.connect()
+    conn = _queue()
+    _refresh_queue(conn, config, reddit)
     guidelines = {sub.name: sub.guidelines for sub in config.subreddits}
 
     print(
@@ -91,7 +136,7 @@ def cmd_draft(args: list[str]) -> None:
     )
 
     results = match_all(fetch_all(reddit, config), config.subreddits)
-    drafted = skipped_existing = skipped_by_model = errors = 0
+    drafted = skipped_existing = skipped_by_model = errors = attempts = 0
 
     for name, verdicts in results.items():
         for verdict in (v for v in verdicts if v.matched):
@@ -99,13 +144,14 @@ def cmd_draft(args: list[str]) -> None:
             if store.has_draft(conn, post.id):
                 skipped_existing += 1
                 continue
-            if drafted >= limit:
+            if attempts >= limit:
                 continue
+            attempts += 1
             try:
-                comment = draft_comment(client, post, guidelines.get(name, ""), config.gemini)
-            except DraftError as error:
+                comment = draft_comment(client, post, guidelines.get(name, ""), config.gemini, policy=config.policy)
+            except Exception:
                 errors += 1
-                print(f"  ! r/{name} {post.title!r}: {error}")
+                print(f"  ! r/{name}: drafting failed; no comment queued.")
                 continue
             if comment is None:
                 skipped_by_model += 1
@@ -115,6 +161,7 @@ def cmd_draft(args: list[str]) -> None:
                 post_id=post.id, subreddit=name, post_title=post.title,
                 post_url=post.url, post_author=post.author,
                 comment=comment, model=config.gemini.model,
+                source_hash=lifecycle.fingerprint(post.title, post.selftext),
             )
             drafted += 1
             print(f"  + r/{name} queued: {post.title}")
@@ -129,10 +176,15 @@ def cmd_draft(args: list[str]) -> None:
         drafted, skipped_existing, skipped_by_model, errors,
     )
     print("Review them with: python main.py drafts")
+    conn.close()
 
 
 def cmd_drafts() -> None:
-    conn = store.connect()
+    conn = _queue()
+    if store.list_drafts(conn):
+        config = load_config()
+        reddit, _ = _sign_in(config)
+        _refresh_queue(conn, config, reddit)
     pending = store.list_drafts(conn, status=store.STATUS_PENDING)
     counts = store.count_by_status(conn)
 
@@ -155,7 +207,11 @@ def cmd_drafts() -> None:
 
 
 def cmd_review() -> None:
-    conn = store.connect()
+    conn = _queue()
+    if store.list_drafts(conn):
+        config = load_config()
+        reddit, _ = _sign_in(config)
+        _refresh_queue(conn, config, reddit)
     pending = store.list_drafts(conn, status=store.STATUS_PENDING)
     if not pending:
         print("No pending drafts to review. Run: python main.py draft")
@@ -176,37 +232,53 @@ def cmd_review() -> None:
 
 
 def cmd_post(args: list[str]) -> None:
+    if "--yes" in args or "-y" in args:
+        raise SystemExit("--yes is no longer supported; live posting requires human confirmation")
     config = load_config()
-    limit = _int_flag(args, "--limit", default=config.post.max_posts_per_run)
+    limit = min(_int_flag(args, "--limit", default=config.post.max_posts_per_run), config.post.max_posts_per_run)
     dry_run = "--dry-run" in args
-    assume_yes = "--yes" in args or "-y" in args
 
-    conn = store.connect()
+    conn = _queue()
     approved = store.list_drafts(conn, status=store.STATUS_APPROVED)
     if not approved:
         print("No approved drafts to post. Approve some with: python main.py review")
         return
     batch = approved[:limit]
+    if dry_run:
+        print(f"Dry run: {len(batch)} approved record(s) selected; no network or posting. Content is hidden until source verification. Live permission checks still apply.")
+        return
+    for draft in batch:
+        policy.require_post(config, draft.subreddit)
+    reddit, me = _sign_in(config)
+    _refresh_queue(conn, config, reddit)
+    batch = store.list_drafts(conn, store.STATUS_APPROVED)[:limit]
+    if not batch:
+        print("No current approved drafts remain after source verification.")
+        return
+    for draft in batch:
+        policy.require_post(config, draft.subreddit)
+        if not draft.comment.rstrip().endswith(policy.AI_DISCLOSURE):
+            store.set_status(conn, draft.post_id, store.STATUS_PENDING)
+            raise SystemExit("Draft lacks AI disclosure; returned to review. Add the required disclosure and approve again.")
 
     print(f"{len(approved)} approved draft(s); will post up to {len(batch)} this run:\n")
     for draft in batch:
         print(f"  r/{draft.subreddit}  {draft.post_title}")
         print(f"    {draft.post_url}")
+        print(draft.comment)
     print()
 
-    if dry_run:  # no sign-in, no network - just show what would be posted
-        print("Dry run - nothing was posted.")
-        return
-
-    reddit, me = _sign_in(config)
-    if not assume_yes and not _confirm(
-        f"Post {len(batch)} comment(s) to Reddit as u/{me}? This cannot be undone. [y/N]: "
+    if not _confirm(
+        f"Have you checked accuracy, current community rules, relevance, and disclosure for these {len(batch)} comment(s)? Publish as u/{me}? [y/N]: "
     ):
         print("Aborted. Nothing was posted.")
         return
 
     print()
-    run = poster.run_posts(conn, reddit, batch, delay=poster.delay_from(config.post))
+    by_id = {d.post_id: d for d in batch}
+    def submit_checked(client, post_id, body):
+        return lifecycle.submit_checked(conn, client, by_id[post_id], body, config, poster.submit_comment)
+    run = poster.run_posts(conn, reddit, batch, delay=poster.delay_from(config.post), submit=submit_checked)
 
     print(f"\nPosted {len(run.posted)}, failed {len(run.failed)}.")
     log.info("post run: %d posted, %d failed, stopped_early=%s",
@@ -214,18 +286,20 @@ def cmd_post(args: list[str]) -> None:
     if run.stopped_early:
         print("Stopped early due to Reddit rate limiting; remaining approved drafts are untouched.")
     if run.posted:
-        print("Karma tracking and logging come in step 6.")
+        print("Published comment scores can be inspected with: python main.py karma")
 
 
 def cmd_karma() -> None:
     config = load_config()
-    conn = store.connect()
+    conn = _queue()
     posted = store.list_drafts(conn, status=store.STATUS_POSTED)
     if not posted:
         print("No posted comments yet. Post some with: python main.py post")
         return
 
     reddit, me = _sign_in(config)
+    _refresh_queue(conn, config, reddit)
+    posted = store.list_drafts(conn, status=store.STATUS_POSTED)
     print(f"Signed in as u/{me}. Reading scores for {len(posted)} posted comment(s)...\n")
     karma.check_karma(conn, reddit, posted, out=print)
 
@@ -333,10 +407,12 @@ def main() -> None:
         cmd_post(args[1:])
     elif command == "karma":
         cmd_karma()
+    elif command == "cleanup":
+        cmd_cleanup(args[1:])
     else:
         print(
             "Usage: python main.py fetch | match [--all] | draft [--limit N] | "
-            "drafts | review | post [--limit N] [--dry-run] [--yes] | karma\n"
+            "drafts | review | post [--limit N] [--dry-run] | karma | cleanup [--sync | --post-id ID | --all]\n"
             "  (add --verbose to echo the log to the console)"
         )
         raise SystemExit(1)

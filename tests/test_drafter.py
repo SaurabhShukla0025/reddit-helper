@@ -3,14 +3,18 @@ tests make no network calls and cost nothing."""
 from __future__ import annotations
 
 from types import SimpleNamespace
+from functools import partial
 
 import pytest
 
-from src.config import GeminiConfig
-from src.drafter import DraftError, SKIP, draft_comment, render_prompt
+from src.config import GeminiConfig, PolicyConfig
+from src.drafter import DraftError, SKIP, draft_comment as unchecked_draft, render_prompt
+from src.policy import disclosed
 from src.fetch import Post
 
 CFG = GeminiConfig()
+draft_comment = partial(unchecked_draft, policy=PolicyConfig(
+    external_ai_approval_reference="test permission", provider_data_use_reviewed=True))
 
 
 def make_post(**over) -> Post:
@@ -64,7 +68,14 @@ def test_render_prompt_handles_empty_body_and_guidelines():
 def test_draft_comment_returns_text():
     client = FakeClient(resp("Use json.load(open('data.json'))."))
     result = draft_comment(client, make_post(), "Be concrete.", CFG)
-    assert result == "Use json.load(open('data.json'))."
+    assert result == disclosed("Use json.load(open('data.json')).")
+
+
+def test_unapproved_ai_processing_makes_no_request():
+    client = FakeClient(resp("ok"))
+    with pytest.raises(SystemExit, match="blocked"):
+        unchecked_draft(client, make_post(), "", CFG)
+    assert client.calls == []
 
 
 def test_draft_comment_passes_model_and_config():

@@ -1,55 +1,27 @@
-# Reddit Helper — Documentation
+# Documentation
 
-Welcome! This folder explains the whole project in plain language, so **anyone**
-— even if you've never used it before — can understand what it is, set it up,
-and run it.
+This is a contribution assistant with blocked-by-default live access, not a
+karma-farming system. Software checks cannot grant permission or certify policy
+compliance. See [README](../README.md) for the workflow and limitations.
 
-## What is Reddit Helper, in one sentence?
+- [Getting started](getting-started.md)
+- [Configuration and permission records](configuration.md)
+- [Commands](commands.md)
+- [Architecture](architecture.md)
+- [Troubleshooting](troubleshooting.md)
+- [Privacy notice to customize](../PRIVACY.md)
 
-A small program that **finds relevant Reddit posts, writes helpful draft comments
-with AI, lets you approve or edit each one, and then posts the approved ones for
-you** — slowly and safely, like a human would. **It never posts anything without
-your approval.**
+Official requirements checked on 2026-10-12:
 
-> It is a *draft-and-approve assistant*, **not** an unattended bot. It is meant
-> for writing genuinely useful comments that follow each community's rules.
+- [Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy)
+- [Developer Terms](https://redditinc.com/policies/developer-terms)
+- [Data API Terms](https://redditinc.com/policies/data-api-terms)
+- [Reddit Rules](https://redditinc.com/policies/reddit-rules)
+- [Spam](https://support.reddithelp.com/hc/en-us/articles/360043504051-Spam)
+- [AI disclosure](https://support.reddithelp.com/hc/en-us/articles/41180423371156-Manipulated-Content-and-Misleading-Behavior)
+- [App behavior](https://support.reddithelp.com/hc/en-us/articles/360043512931-Don-t-break-the-site)
 
-## The big picture
-
-The tool works in six stages. You run one command for each stage:
-
-```
-  1. fetch     →  2. match    →  3. draft    →  4. review   →  5. post     →  6. karma
-  ─────────       ─────────       ─────────      ─────────      ─────────      ─────────
-  read recent     keep only       AI writes      you approve    post the       track how
-  posts from      the posts       a comment      / edit /       approved       your posted
-  your chosen     worth           for each       reject each    comments to    comments
-  subreddits      replying to     good post      draft          Reddit         score over time
-  (read-only)     (read-only)     (Gemini API)   (you decide)   (asks first)   (read-only)
-```
-
-Everything is saved in between, so you can do step 3 today and step 5 tomorrow.
-
-## Table of contents
-
-Read these in order if you're new:
-
-1. **[Getting Started](getting-started.md)** — install it, get your Reddit and
-   Gemini keys, fill in the config, and run it for the first time.
-2. **[Commands](commands.md)** — every command, what it does, and example output.
-3. **[Configuration](configuration.md)** — a full reference for `config.yaml`
-   (every setting explained).
-4. **[Architecture](architecture.md)** — how the code is organized and how data
-   flows (for developers / the curious).
-5. **[Troubleshooting & Glossary](troubleshooting.md)** — fixes for common
-   errors, plus plain-English definitions of the words used here.
-
-## Is it safe? Does it cost money?
-
-- **Reddit API** — free. Reading posts and posting comments costs nothing.
-- **Gemini API** — has a **free tier**, and **only** the `draft` command uses it.
-  There are built-in caps so you stay within your quota.
-- **Posting** is the only action that changes anything on Reddit, and it always
-  **asks you to confirm first**.
-
-See [Getting Started](getting-started.md) to begin.
+Recheck current policies and community rules before operation. If the purpose,
+provider, account, or community scope changes, obtain any required updated
+permission first. Repeated or unwanted engagement is prohibited even if paced
+and reviewed. Score inspection must not become karma manipulation.

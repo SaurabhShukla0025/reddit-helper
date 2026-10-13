@@ -1,6 +1,6 @@
 """Tracks the score (karma) of comments this tool has posted.
 
-Reading a comment's score uses Reddit's free API. The score lookup is injected
+Reading a comment's score uses the approved Reddit API. The score lookup is injected
 into `check_karma`, so recording and reporting are tested with no network.
 """
 from __future__ import annotations

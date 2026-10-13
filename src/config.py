@@ -1,7 +1,7 @@
 """Loads and validates config.yaml."""
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import yaml
@@ -39,6 +39,25 @@ class Subreddit:
     name: str
     guidelines: str
     rules: MatchRules
+    access_reference: str = ""
+    comments_reference: str = ""
+    ai_comments_allowed: bool = False
+    rules_reviewed_on: str = ""
+
+
+@dataclass
+class PolicyConfig:
+    """Operator records of real permissions, not a grant of permission."""
+
+    api_approval_reference: str = ""
+    app_registration_reference: str = ""
+    dedicated_app_username: str = ""
+    privacy_policy_reviewed: bool = False
+    data_security_reviewed: bool = False
+    deletion_contact: str = ""
+    external_ai_approval_reference: str = ""
+    provider_data_use_reviewed: bool = False
+    retention_days: int = 30
 
 
 @dataclass
@@ -59,7 +78,7 @@ class GeminiConfig:
 class PostConfig:
     """Pacing and safety limits for posting approved comments (step 5)."""
 
-    min_delay_seconds: int = 300   # shortest human-like pause between posts
+    min_delay_seconds: int = 300   # shortest load-control pause between posts
     max_delay_seconds: int = 900   # longest pause; a random value in [min, max] is used
     max_posts_per_run: int = 5     # safety cap on posts per `post` run
 
@@ -72,6 +91,7 @@ class Config:
     limit: int
     gemini: GeminiConfig
     post: PostConfig
+    policy: PolicyConfig = field(default_factory=PolicyConfig)
 
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
@@ -152,6 +172,10 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
             name=str(item["name"]),
             guidelines=str(item.get("guidelines", "")).strip(),
             rules=_match_rules(item.get("match") or {}, defaults),
+            access_reference=str(item.get("access_reference") or "").strip(),
+            comments_reference=str(item.get("comments_reference") or "").strip(),
+            ai_comments_allowed=_as_bool(item.get("ai_comments_allowed", False), "subreddits.ai_comments_allowed"),
+            rules_reviewed_on=str(item.get("rules_reviewed_on") or "").strip(),
         )
         for item in (data.get("subreddits") or [])
         if item.get("name")
@@ -171,7 +195,36 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
         limit=int(fetch.get("limit", 10)),
         gemini=_gemini_config(data.get("gemini") or {}),
         post=_post_config(data.get("post") or {}),
+        policy=_policy_config(data.get("policy") or {}),
     )
+
+
+def _as_bool(value, field: str) -> bool:
+    if not isinstance(value, bool):
+        raise SystemExit(f"config.yaml: {field} must be true or false (not quoted)")
+    return value
+
+
+def _policy_config(raw: dict) -> PolicyConfig:
+    if not isinstance(raw, dict):
+        raise SystemExit("config.yaml: policy must be a mapping")
+    unknown = set(raw) - set(PolicyConfig.__dataclass_fields__)
+    if unknown:
+        raise SystemExit(f"config.yaml: unknown policy keys: {', '.join(sorted(unknown))}")
+    values = {}
+    for key in PolicyConfig.__dataclass_fields__:
+        if key not in raw:
+            continue
+        if key in {"privacy_policy_reviewed", "provider_data_use_reviewed", "data_security_reviewed"}:
+            values[key] = _as_bool(raw[key], f"policy.{key}")
+        elif key == "retention_days":
+            value = _as_int(raw[key], "policy.retention_days")
+            if value is None or not 1 <= value <= 30:
+                raise SystemExit("config.yaml: policy.retention_days must be between 1 and 30")
+            values[key] = value
+        else:
+            values[key] = str(raw[key] or "").strip()
+    return PolicyConfig(**values)
 
 
 def _post_config(raw: dict) -> PostConfig:

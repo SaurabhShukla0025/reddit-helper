@@ -1,4 +1,4 @@
-"""Posts approved comments to Reddit, paced like a human and rate-limit aware.
+"""Posts approved comments with load-control pauses and rate-limit backoff.
 
 This is the only module that writes to Reddit. The network call, the pauses and
 the pacing delay are all injected into `run_posts`, so the ordering, pacing and
@@ -89,7 +89,7 @@ def submit_comment(reddit, post_id: str, body: str) -> str:
 
 
 def delay_from(cfg: PostConfig, rng: Callable[[float, float], float] = random.uniform):
-    """A callable returning a random human-like pause within the configured range."""
+    """A callable returning a load-control pause within the configured range."""
     return lambda: rng(cfg.min_delay_seconds, cfg.max_delay_seconds)
 
 
