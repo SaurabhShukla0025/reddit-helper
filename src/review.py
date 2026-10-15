@@ -5,6 +5,7 @@ reviewer's action), an `edit` callable (returns new comment text) and an `out`
 callable (prints). `main.py` wires those to stdin and the user's editor; tests
 wire them to canned functions, so the whole flow runs with no terminal.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -12,7 +13,6 @@ from dataclasses import dataclass
 from typing import Callable
 
 from . import store
-from .policy import disclosed
 from .store import Draft
 
 # Reviewer actions.
@@ -61,7 +61,7 @@ def run_review(
     total = len(pending)
 
     for index, draft in enumerate(pending, start=1):
-        comment = disclosed(draft.comment)
+        comment = draft.comment
         if comment != draft.comment:
             store.update_comment(conn, draft.post_id, comment)
         while True:
@@ -80,7 +80,7 @@ def run_review(
                 break
             if action == EDIT:
                 edited = edit(comment).strip()
-                new_comment = disclosed(edited) if edited else comment
+                new_comment = edited if edited else comment
                 if new_comment and new_comment != comment:
                     store.update_comment(conn, draft.post_id, new_comment)
                     comment = new_comment

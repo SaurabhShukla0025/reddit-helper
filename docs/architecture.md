@@ -1,30 +1,21 @@
 # Architecture
 
-`main.py` wires CLI I/O into configuration, policy gates, Reddit/Gemini clients,
-a SQLite queue, review, checked submission, and score inspection.
+main.py receives an explicit submission ID, loads approved single-community
+configuration, verifies the selected source and queues the operator's reply.
+review handles display and human review. Editing invalidates approval.
+policy gates all live access and posting. reddit_client builds the PRAW client
+using injected environment credentials.
 
-`src/policy.py` checks operator records before live clients are constructed.
-`src/lifecycle.py` compares current title/body hashes and removes records when
-the source changes or becomes unavailable. It checks approval state, disclosure,
-source eligibility, locked/archived state, and exact duplicates before posting.
-`src/drafter.py` separately blocks model calls without external-processing records.
-These checks cannot prove that references correspond to genuine Reddit approval.
+lifecycle revalidates sources before display and publication. store reserves
+publication under a SQLite write lock, checks retained duplicate/similar comments,
+increments the UTC daily attempt counter, and marks the draft uncertain BEFORE
+the network call. Success records the permalink and posted status. Network
+failures cannot trigger automatic retries or reapproval of uncertain drafts.
 
-The drafts table contains metadata, comment, status, model, timestamps, posted
-URL, and `source_hash`. Migration adds missing columns. Legacy rows without a
-fingerprint are deleted on synchronization instead of implicitly trusting old
-approvals. Lifecycle: pending -> approved/rejected; approved -> posted.
-The karma table stores score readings. Local deletion removes both tables' rows.
-SQLite secure deletion is enabled; OS encryption and backup deletion remain
-operator responsibilities. Retention is enforced at queue opening.
+store also migrates legacy schemas, removes non-human drafts/karma data, clears
+authors and enforces retention. Daily counters have no source or author identifiers.
+main maintenance runs local cleanup hourly. It is not a deletion-event listener,
+does not call Reddit, and is not installed as a persistent OS service.
 
-Human review adds/preserves an AI disclosure. The CLI has no confirmation bypass.
-A checked submit wrapper revalidates immediately before each reply and retry.
-The poster still exposes low-level injected functions for offline unit testing;
-production operation must go through the guarded CLI, not custom scripts that
-call network primitives directly.
-
-No scheduler, background deletion listener, moderator-permission verification,
-provider data-use verification, semantic spam detector, encrypted database
-implementation, or remote approval validation is provided. Human review remains
-necessary. Tests fake networks and sleeps and use real local SQLite.
+The database is local and unencrypted. Backups, other machines and provider-side
+published content lie outside this application's local cleanup and limits.

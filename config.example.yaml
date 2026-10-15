@@ -1,58 +1,33 @@
-# Copy to config.yaml. Never paste real credentials into chat or commit them.
-# Empty permission references deliberately block live operation.
+# Never fill approval fields until real authorization covers this workflow.
+# Credentials: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_PASSWORD environment variables.
 reddit:
-  client_id: "YOUR_CLIENT_ID"
-  client_secret: "YOUR_CLIENT_SECRET"
-  username: "YOUR_REDDIT_USERNAME"
-  password: "YOUR_REDDIT_PASSWORD"
-  user_agent: "contribution-helper/0.2 by u/YOUR_REDDIT_USERNAME"
-
+  username: "YOUR_APP_USERNAME"
+  user_agent: "contribution-helper/0.3 by u/YOUR_APP_USERNAME"
 policy:
-  api_approval_reference: ""           # real Reddit approval covering this use case
-  app_registration_reference: ""       # developer/app registration and profile label
-  dedicated_app_username: ""           # account used solely for app functions
-  privacy_policy_reviewed: false        # customize PRIVACY.md before setting true
-  data_security_reviewed: false         # secure credentials, OS encryption and access
-  deletion_contact: ""                 # real accessible channel for deletion requests
-  external_ai_approval_reference: ""    # explicit permission to send Reddit text to Google
-  provider_data_use_reviewed: false     # permitted retention/use; no unauthorized training
-  retention_days: 30                    # 1-30; shorten to match actual approval
-
-fetch:
-  listing: "new"                       # new | rising | hot
-  limit: 10
-
-gemini:
-  model: "gemini-flash-latest"          # alias that always maps to the current Flash model
-                                        # (or pin one, e.g. "gemini-2.5-flash", if yours requires it)
-  temperature: 0.7
-  max_tokens: 1024
-  max_drafts_per_run: 10                # hard cap on calls, including declines/errors
-
+  api_approval_reference: ""
+  app_registration_reference: ""
+  dedicated_app_username: ""
+  approved_purpose: ""
+  approval_conditions: ""         # record and follow all conditions; not automatically interpreted
+  approval_expires_on: ""         # YYYY-MM-DD if approval has an expiry
+  privacy_policy_reviewed: false
+  data_security_reviewed: false
+  deletion_contact: ""
+  retention_days: 7
+  operator_identity: ""
+  app_profile_label_reference: ""
+  terms_accepted_on: ""            # actual developer/API terms acceptance date YYYY-MM-DD
+  devvit_assessment_reference: ""  # reviewed platform-fit evidence
+  external_api_exception_reference: "" # actual Reddit permission for this external CLI
+  storage_security_reference: ""  # verified ACL/encryption procedure, not a generic checkbox
+  backup_deletion_procedure_reference: ""
+  cleanup_schedule_reference: ""   # installed task or running maintenance arrangement
+  privacy_notice_sha256: ""       # recorded by privacy-review after notice completion
 post:
-  min_delay_seconds: 300               # load-control pauses; not identity masking
-  max_delay_seconds: 900
-  max_posts_per_run: 5                 # hard per-run cap, no confirmation bypass
-
-match:
-  keywords: []
-  exclude: []
-  min_score: 0
-  max_score: null
-  min_comments: 0
-  max_comments: null
-  max_age_hours: 48
-
-# Examples only; these communities have NOT been verified or authorized here.
+  max_posts_per_day: 3            # persistent UTC daily attempt cap, including uncertain failures
 subreddits:
-  - name: "learnpython"
-    access_reference: ""                # permitted community scope in API approval
-    comments_reference: ""              # current rule/moderator permission for app replies
-    ai_comments_allowed: false           # only true if disclosed AI replies are permitted
-    rules_reviewed_on: ""                # YYYY-MM-DD, refresh at least every 30 days
-    guidelines: >
-      Answer only questions you can accurately help with. Be specific and patient.
-      Do not invent personal experience. No promotion or sensitive user profiling.
-    match:
-      keywords: ["how do i", "error", "typeerror", "beginner", "help"]
-      exclude: ["hiring", "job"]
+  - name: "YOUR_COMMUNITY"
+    access_reference: ""
+    comments_reference: ""
+    rules_reviewed_on: ""         # YYYY-MM-DD, refresh at least every 30 days
+    guidelines: "Record the current community rules and contribution requirements."

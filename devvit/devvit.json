@@ -1,0 +1,105 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "user-helper",
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.cjs"
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "Write a reply with Contribution Helper",
+        "location": "post",
+        "forUserType": "user",
+        "endpoint": "/internal/menu/write"
+      },
+      {
+        "label": "Delete my local reply data",
+        "location": "post",
+        "forUserType": "user",
+        "endpoint": "/internal/menu/delete"
+      },
+      {
+        "label": "Delete all my local reply data",
+        "location": "subreddit",
+        "forUserType": "user",
+        "endpoint": "/internal/menu/delete-all"
+      }
+    ]
+  },
+  "forms": {
+    "writeReply": "/internal/form/write",
+    "reviewReply": "/internal/form/review"
+  },
+  "permissions": {
+    "reddit": {
+      "enable": true,
+      "scope": "user"
+    },
+    "redis": true
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "triggers": {
+    "onPostDelete": "/internal/triggers/source-change",
+    "onPostUpdate": "/internal/triggers/source-change"
+  },
+  "settings": {
+    "subreddit": {
+      "operation-mode": {
+        "type": "select",
+        "label": "Permitted operation mode",
+        "options": [
+          {
+            "label": "Disabled",
+            "value": "disabled"
+          },
+          {
+            "label": "Permitted owner playtest",
+            "value": "playtest"
+          },
+          {
+            "label": "Reviewed and approved installation",
+            "value": "approved"
+          }
+        ],
+        "defaultValue": "disabled"
+      },
+      "approved-community": {
+        "type": "string",
+        "label": "Single permitted community",
+        "defaultValue": "saurabhhelpertest"
+      },
+      "permission-reference": {
+        "type": "string",
+        "label": "Actual permitted playtest or Reddit review reference",
+        "defaultValue": ""
+      },
+      "deletion-contact": {
+        "type": "string",
+        "label": "Public deletion contact",
+        "defaultValue": "saurabhimapro@gmail.com"
+      },
+      "privacy-url": {
+        "type": "string",
+        "label": "Public HTTPS privacy notice URL",
+        "defaultValue": "https://www.reddit.com/r/saurabhhelpertest/s/L7mpUwJldM"
+      },
+      "community-permission": {
+        "type": "string",
+        "label": "Actual community permission reference",
+        "defaultValue": ""
+      },
+      "rules-reviewed-on": {
+        "type": "string",
+        "label": "Current rules reviewed on (YYYY-MM-DD)",
+        "defaultValue": ""
+      }
+    }
+  },
+  "dev": {
+    "subreddit": "saurabhhelpertest"
+  }
+}

@@ -1,5 +1,8 @@
 # Your real credentials and subreddit list — never commit these.
 config.yaml
+.credentials.bin
+.cleanup-task.json
+.data-protection.json
 
 # Python
 .venv/
@@ -15,3 +18,11 @@ __pycache__/
 
 # Local throwaway test script (not for the public repo)
 try_gemini.py
+
+# Devvit local dependencies and generated bundles
+devvit/node_modules/
+devvit/dist/
+devvit/.devvit/
+
+# Separate nested project with its own git repo (registration scaffold)
+reddit-registration/

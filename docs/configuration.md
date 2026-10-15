@@ -1,49 +1,36 @@
-# Configuration and permission records
+# Configuration
 
-`config.yaml` is a local, git-ignored file. All permission fields default to
-empty/false. Setting them is a record of real authorization, not a bypass to
-obtain authorization. Do not enable a feature outside the approved scope.
+Use config.example.yaml as the current schema. Legacy fetch/match/gemini settings
+and plaintext credential settings are rejected; migrate before live use.
 
-## Required policy records
+reddit contains username and user_agent only. The credential environment variables
+are REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET and REDDIT_PASSWORD. Use a trusted
+credential manager; environment variables are not an encrypted secret vault.
 
-| Setting | Meaning |
-|---|---|
-| `api_approval_reference` | Reddit approval/ticket covering the actual API use case |
-| `app_registration_reference` | App/developer registration and required profile labeling |
-| `dedicated_app_username` | Dedicated app account; must match credentials and live identity |
-| `privacy_policy_reviewed` | Operator has customized and published/made available the notice as applicable |
-| `data_security_reviewed` | Appropriate storage encryption/access controls and credential protection established |
-| `deletion_contact` | Accessible real channel for requests, also included in the privacy notice |
-| `external_ai_approval_reference` | Explicit authorization for sending Reddit text to the selected third-party AI service |
-| `provider_data_use_reviewed` | Provider processing/retention/training conditions reviewed and permitted |
-| `retention_days` | Local maximum age, 1-30 days; choose a shorter period if approval requires it |
+policy records actual approval reference, app registration reference, dedicated
+username, approved purpose, approval conditions, optional approval_expires_on
+(YYYY-MM-DD), privacy/security review attestations, deletion contact and retention.
+Expiry dates permit use through that date. Approval conditions must be enforced by
+the operator; arbitrary conditions are not parsed by this CLI.
 
-Boolean values must be YAML `true`/`false`, not strings. API commands require the
-first six records. Drafting and posting additionally require both external-AI
-records. The operator must stop and clear permissions if approval is revoked.
+subreddits must contain exactly one community, access_reference,
+comments_reference, rules_reviewed_on and guidelines. Rules review expires after
+30 days. All defaults intentionally block live access.
 
-## Community records
+retention_days is an integer from 1 to 30, default 7. max_posts_per_day is an
+integer from 1 to 10, default 3; set it lower if approval requires that.
+The cap counts attempts in UTC and persists across runs, including uncertain
+network outcomes. It is local to this database and is not a global account limit.
 
-Each subreddit requires `access_reference` (permitted scope) and
-`rules_reviewed_on` (YYYY-MM-DD, no future dates, no more than 30 days old).
-Drafting/posting also require `comments_reference` (rules or moderator permission
-covering the workflow) and `ai_comments_allowed: true`. Recheck rules whenever
-they change; the 30-day guard is an additional local control, not Reddit's
-mandated review interval. Example community names are not endorsements.
 
-## Other settings
+Additional evidence fields: operator_identity, app_profile_label_reference,
+terms_accepted_on, devvit_assessment_reference, external_api_exception_reference,
+storage_security_reference, backup_deletion_procedure_reference,
+cleanup_schedule_reference and privacy_notice_sha256. These are operator records,
+not verification of external authorization. Blank values block live access.
+The external API exception must be actual Reddit permission for this architecture.
+No unsupported Devvit capability has been substantiated.
 
-- `reddit`: client ID/secret, dedicated username/password, honest User-Agent.
-- `fetch`: `new`, `rising`, or `hot`, and per-community limit.
-- `gemini`: model, temperature (0-2), output token limit, hard request cap.
-- `post`: load-control delay range and hard per-run post cap. `--limit` may lower
-  either cap but cannot increase it. No noninteractive confirmation bypass.
-- `match`: case-insensitive title/body keywords and exclusions, optional score,
-  comment-count and age limits. Per-community settings inherit global fields.
-  These filters are for relevance, not automatic maximization of karma.
-- `guidelines`: verified community rules and useful-response guidance. Prompts
-  cannot guarantee compliance, correctness, or moderator acceptance.
-
-The Gemini model value is configurable; this change does not verify provider
-model availability or pricing. The program refuses private, quarantined, NSFW,
-deleted, and removed sources as an intentionally narrower supported scope.
+privacy-review records review of the completed PRIVACY.md bytes. A placeholder,
+a changed notice, or a missing operator/contact in the notice blocks live access.
+Encrypted Windows credentials are optional; environment values take precedence.

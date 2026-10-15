@@ -1,4 +1,5 @@
 """Tests for the SQLite review queue. Uses an in-memory database."""
+
 from __future__ import annotations
 
 import pytest
@@ -22,7 +23,7 @@ def add(conn, post_id="t3_1", status=store.STATUS_PENDING, subreddit="learnpytho
         post_url=f"https://reddit.com/{post_id}",
         post_author="someone",
         comment="Here is a concrete suggestion...",
-        model="claude-opus-5-5",
+        model="human",
         status=status,
     )
 

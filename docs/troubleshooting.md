@@ -1,33 +1,27 @@
 # Troubleshooting
 
-**Live API access blocked:** Obtain actual approval and app registration, configure
-a dedicated identity, customize the privacy notice, establish storage protections
-and a deletion contact, and record the references. Do not toggle values simply
-to bypass checks.
+Live access blocked: record only real authorization covering this app and community.
+Configuration flags do not grant access. Check registration, dedicated identity,
+purpose, privacy/security review, community references and expiry.
 
-**Gemini drafting blocked:** The standard workflow does not presume permission
-to share Reddit text with Google. Record explicit authorization and review the
-provider's permitted data handling first. Without it, keep AI processing disabled.
+Legacy configuration: replace it using config.example.yaml and move secrets out
+of config. Local cleanup requires no credentials and works with legacy retention
+settings. Legacy AI drafts are removed during migration.
 
-**Community permission/rules error:** Verify allowed scope and current community
-rules. AI replies may be prohibited. Record permitted commenting and a current
-review date only after checking.
+Source verification failed: wait until verification succeeds. Deleted, changed
+or protected sources remove the local draft; write and review a fresh reply only
+if the source is still eligible.
 
-**Source verification failed:** No unverified queued content is shown or posted.
-Resolve the network/API problem and rerun. The app does not treat unknown failures
-as proof of deletion.
+Daily limit reached: wait for the next UTC day. Do not delete the database or use
+other accounts to bypass it.
 
-**Records disappeared during sync:** Edited/deleted/removed/protected/out-of-scope
-sources and legacy drafts without fingerprints are removed locally. Retention
-also removes expired records and score history. Regenerate only if currently
-permitted and applicable; every replacement requires review.
+Uncertain submission: check the app account's comments on Reddit. Do not blindly
+retry; the draft cannot be approved or posted again through this CLI.
 
-**Missing disclosure:** Review adds the fixed disclosure and restores it after
-edits. Posting refuses missing disclosure and returns the draft to pending.
+Maintenance stopped: restart python main.py maintenance, or configure your OS
+scheduler to run python main.py cleanup hourly. The Windows installer provides a
+project-specific task; check its current enabled state and LastTaskResult. This
+workspace has a verified task installed, but it requires the owning user to be signed in.
 
-**Rate limiting or posting error:** The poster backs off, retries once, then stops
-if rate-limited again. Other errors leave drafts unposted. Do not use pacing,
-new accounts, credential rotation, or repeated runs to evade restrictions.
-
-**Deleting data:** Use local cleanup for requests or shutdown. Handle published
-comments, provider copies, old logs, and backups separately. See [privacy](../PRIVACY.md).
+Privacy notice: complete the operator identity, actual deletion contact, approved
+purpose/community, retention and storage practices before live use.

@@ -1,17 +1,25 @@
 # Contribution Helper for Reddit
 
-A local Python CLI for preparing useful, accurate contributions in communities
-that permit the workflow. It is not an automated karma-farming system.
+The Reddit-native version is now built in [devvit/](devvit/README.md). It uses
+Reddit post menus and forms for writing, reviewing and confirming one reply.
+Its local tests and production build pass; registration, permitted on-platform
+testing, public privacy/contact details and Reddit review are still required.
+The Python CLI described below remains separately blocked pending its own permission.
 
-**Live access is blocked by default.** Obtain explicit Reddit authorization for
-API access, community scope, posting, and any third-party AI processing before
-recording those permissions in configuration. A configuration value is an
-operator attestation, not verification or a grant of permission. These controls
-reduce risk; they do not certify compliance or guarantee Reddit approval.
+A local Python CLI for human-written replies in one approved community.
+You choose a post, write a reply, review it, and explicitly publish that one comment.
+There is no post discovery, Gemini processing, karma tracking, voting, private
+messaging, batch publishing, or automatic submission retry.
+
+**Live access is blocked until real Reddit authorization is recorded.**
+Configuration records operator attestations; it does not grant or verify approval.
+Reddit directs developers to Devvit first. This external CLI is not a Devvit app:
+assess Devvit and document a real unsupported capability before requesting an
+external API exception. This implementation cannot guarantee approval.
 
 ## Setup
 
-Use Python 3.10+, create a virtual environment, and install dependencies:
+Use Python 3.10+:
 
 ```powershell
 python -m venv .venv
@@ -21,74 +29,86 @@ Copy-Item config.example.yaml config.yaml
 python -m pytest -q
 ```
 
-Read [the operating requirements](docs/configuration.md) and
-[the privacy notice](PRIVACY.md) before configuring live operation.
-Do not put passwords or API keys in chat, issues, or commits.
+Record real approval, app registration/label, dedicated app account, permitted
+purpose, community scope, posting permission, conditions and expiry in config.
+Complete [PRIVACY.md](PRIVACY.md) with your real identity and deletion contact.
+Choose retention and daily limits consistent with approval. Never fabricate permissions.
+
+Credentials come from REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET and REDDIT_PASSWORD
+environment variables. Inject them through your trusted credential manager or
+session; do not save secrets in config, shell history, chat, or the repository.
+On Windows, `python main.py credentials set` can save credentials using
+current-user DPAPI encryption. The app does not encrypt SQLite.
+
+Run `python main.py readiness` for an offline report of missing evidence.
+Complete the privacy notice and run `python main.py privacy-review` to record
+review of its exact bytes; later edits invalidate that review.
+See [operating procedures](docs/operations.md) and the
+[Devvit assessment](docs/devvit-assessment.md). Core functionality appears
+supported by Devvit; no external platform exception has been established.
 
 ## Workflow
 
+Select a submission in the approved community yourself. Copy its submission ID
+from its URL, e.g. abc123 in /comments/abc123/.
+
 ```powershell
-python main.py fetch
-python main.py match --all
-python main.py draft --limit 1
-python main.py drafts
-python main.py review
-python main.py post --dry-run
-python main.py post --limit 1
-python main.py karma
+python main.py draft abc123 --text-file my-reply.txt
+python main.py review abc123
+python main.py post abc123
+```
+
+Omit --text-file to write in your editor. Review allows approve/reject/edit.
+An edit returns the draft to pending. Publishing shows the exact reply and asks
+for one explicit confirmation. There is no --yes or batch selection.
+Write the reply yourself; there is no AI integration or AI-disclosure injection.
+
+Before queued content is displayed or published, the source is checked.
+Changed, removed, deleted, NSFW, protected or out-of-scope sources are purged.
+Locked/archived posts cannot receive replies; verification errors block use.
+Exact and highly similar text are blocked against retained posted/uncertain drafts.
+These checks are heuristics, so review must also reject spam and unwanted replies.
+
+Daily publish attempts use persistent UTC counters, including failed or uncertain
+submissions. Concurrent reservations are serialized. An uncertain submission
+cannot be approved or republished: check Reddit and resolve it manually.
+Removing queue records does not reset today's attempt count. Do not delete or
+replace the database to bypass limits. Limits apply to this local database,
+not other machines or directly published comments.
+
+## Automatic local cleanup
+
+```powershell
+python main.py maintenance
+```
+
+Leave this separate process running for hourly local retention cleanup; Ctrl+C
+stops it. Cleanup also runs on every queue access. The maintenance process itself
+is not installed as a service; the separate Windows task handles scheduled cleanup.
+The Windows installer `scripts/install-cleanup-task.ps1` provides an hourly/logon
+task using pythonw. It runs only while its owning user is signed in and catches
+up when available. A task is installed and verified in this workspace.
+Use `scripts/protect-local-data.ps1` to restrict existing application data files
+to the owning Windows user, SYSTEM and administrators; repeat for new files.
+Disk encryption requires a separate verified OS configuration.
+
+```powershell
 python main.py cleanup --sync
+python main.py cleanup --post-id abc123
+python main.py cleanup --all
 ```
 
-Fetching and matching read Reddit live; they require approval too. Drafting sends
-post titles and bodies to Gemini only after the additional external-processing
-permission checks pass. The model may decline a post. Draft limits count every
-request, including declines and errors; CLI limits cannot exceed configured caps.
+Source deletion checks require approved API access and --sync; local maintenance
+does not call Reddit. Backups and user-created reply files require operator cleanup.
+New versions use console-only logs; cleanup removes the four legacy app log files.
+Local cleanup never removes comments already published on Reddit.
 
-Review shows disclosed AI drafts and supports approve, reject, edit, skip, and
-quit. Editing preserves the disclosure. Posting requires human confirmation of
-accuracy, relevance, disclosure, and current community rules. `--yes` is rejected.
-Pauses control load; they must not conceal app identity or evade enforcement.
+## Migration
 
-Source posts are checked before queued content is displayed or used, and again
-before each submission/retry. Changed, removed, deleted, private, quarantined,
-NSFW, and out-of-scope source records are purged. Locked/archived posts cannot
-receive comments. Network verification errors block use rather than exposing
-unverified content. Old queue rows lacking source fingerprints are purged during
-synchronization; regenerate and review them only under an authorized workflow.
-Exact duplicate comment text is blocked within retained posted records; human
-review must also reject substantially similar or otherwise unwanted content.
+Replace legacy configuration with the new example, retaining only real permissions.
+On first queue access, legacy non-human drafts and karma history are removed,
+and stored author names are cleared. Legacy AI drafts cannot be published.
+Retained human drafts without source fingerprints are removed during verification.
+Local deletion commands work without API credentials or authorization.
 
-`post --dry-run` stays offline and shows only a count: source content remains
-hidden until live verification. It is not evidence that posting is authorized.
-`karma` records comment scores for inspection, not karma optimization.
-
-## Data cleanup
-
-```powershell
-python main.py cleanup                  # enforce configured retention locally
-python main.py cleanup --sync           # verify sources with approved API access
-python main.py cleanup --post-id abc123 # process a local data deletion request
-python main.py cleanup --all            # remove all local queue data on shutdown
-```
-
-Cleanup deletes local records, not published Reddit comments. Retention defaults
-to 30 days, may be shortened, and runs whenever the CLI opens the queue. The clock
-uses original draft creation; updates do not extend retention. Run cleanup/sync
-regularly while operating; no scheduler or background deletion listener is
-installed. Handle deletion requests promptly, including backups and external
-provider records. If permission is revoked, stop live use and run local cleanup.
-
-## Files
-
-- `main.py`: CLI, real clients, verification, confirmation, cleanup.
-- `src/policy.py`: permission and disclosure checks.
-- `src/lifecycle.py`: source fingerprints, revalidation, submission checks.
-- `src/config.py`: settings and validation.
-- `src/fetch.py`, `src/match.py`: eligible posts and topic rules.
-- `src/drafter.py`, `src/review.py`: authorized AI drafting and human review.
-- `src/poster.py`: submission orchestration, load pauses, rate-limit backoff.
-- `src/store.py`, `src/karma.py`: local queue and score history.
-- `src/applog.py`: rotating operational log.
-- `tests/`: offline fake clients and SQLite regression tests.
-
-[Documentation](docs/README.md) covers setup, commands, architecture, and limits.
+[Documentation](docs/README.md) describes configuration, commands and limits.

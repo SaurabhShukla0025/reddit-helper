@@ -1,23 +1,26 @@
 # Commands
 
-`python main.py <command>`; add `--verbose` for operational log output.
-
 | Command | Behavior |
 |---|---|
-| `fetch` | Approved API access: read eligible public posts |
-| `match [--all]` | Fetch live, filter by relevance; optionally explain exclusions |
-| `draft [--limit N]` | Approved external processing; hard cap counts declines/errors too |
-| `drafts` | Verify existing sources before displaying pending content |
-| `review` | Verify sources, then approve/reject/edit/skip/quit; disclosure is preserved |
-| `post --dry-run` | Offline count only, no unverified source content or posting |
-| `post [--limit N]` | Permission, identity and source checks; human confirmation; recheck on each submit/retry |
-| `karma` | Read and record scores for retained, verified published contributions |
-| `cleanup` | Enforce local retention without API access |
-| `cleanup --sync` | With approved API access, remove stale/changed/unavailable sources |
-| `cleanup --post-id ID` | Delete one post's local metadata, draft and score history |
-| `cleanup --all` | Delete all queue data when stopping or handling revocation |
+| setup --username NAME --community NAME | Initialize public details without fabricating permissions |
+| readiness | Report missing local evidence without loading credentials or calling Reddit |
+| privacy-review | Review the completed notice and record its hash |
+| credentials set | Hidden local input saved with current-user Windows encryption |
+| credentials clear | Remove encrypted local credentials; environment values remain |
+| draft ID --text-file FILE | Verify selected source and queue your human-written reply |
+| draft ID | Open the editor to write a reply |
+| review ID | Verify source, show text and approve, reject or edit |
+| post ID | Verify source, require approval and confirm exactly one publication |
+| post ID --dry-run | Offline existence/status check; content remains hidden |
+| cleanup | Prune local retention and remove legacy app logs |
+| cleanup --sync | Also verify queued sources through the authorized API |
+| cleanup --post-id ID | Delete one source's local data |
+| cleanup --all | Delete all queue content; retain today's attempt counter |
+| maintenance | Repeat local cleanup hourly until stopped |
 
-`post --yes` and `post -y` are rejected. Local cleanup does not remove published
-Reddit comments, external provider data, logs, or backups. Manage those separately.
-Queued content commands may now require live verification and credentials even
-though they do not publish anything. Empty queues and local cleanup stay offline.
+Use plain submission IDs without t3_ or URLs. There is no fetch, match, karma,
+batch limit, Gemini drafting or --yes command. Optional -v precedes the command.
+
+Maintenance needs no API credentials and makes no network requests. It must remain
+running, or be replaced by the Windows task installer or another OS schedule. Cleanup never
+deletes published Reddit comments or user-created reply files/backups.

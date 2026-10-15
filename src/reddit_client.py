@@ -1,4 +1,5 @@
 """Builds the authenticated Reddit API client."""
+
 from __future__ import annotations
 
 import praw

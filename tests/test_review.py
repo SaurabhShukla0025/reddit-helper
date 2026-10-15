@@ -2,12 +2,12 @@
 
 A real in-memory SQLite queue is seeded, and the reviewer's actions/edits are
 supplied as canned callables, so the whole flow runs with no terminal."""
+
 from __future__ import annotations
 
 import pytest
 
 from src import review, store
-from src.policy import disclosed
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def seed(conn, *post_ids):
             post_url=f"https://reddit.com/{pid}",
             post_author="someone",
             comment=f"draft for {pid}",
-            model="claude-opus-5-5",
+            model="human",
         )
 
 
@@ -86,7 +86,7 @@ def test_edit_then_approve_updates_comment_and_status(conn):
     assert summary.edited == 1
     assert summary.approved == 1
     draft = store.get_draft(conn, "t3_1")
-    assert draft.comment == disclosed("edited comment text")
+    assert draft.comment == "edited comment text"
     assert draft.status == store.STATUS_APPROVED
 
 
@@ -116,10 +116,16 @@ def test_quit_stops_and_leaves_rest_pending(conn):
 
 def test_render_draft_shows_title_and_comment_lines():
     draft = store.Draft(
-        post_id="t3_1", subreddit="learnpython", post_title="a title",
-        post_url="https://reddit.com/t3_1", post_author="me",
-        comment="line one\nline two", status="pending",
-        model="claude-opus-5-5", created_at="now", updated_at="now",
+        post_id="t3_1",
+        subreddit="learnpython",
+        post_title="a title",
+        post_url="https://reddit.com/t3_1",
+        post_author="me",
+        comment="line one\nline two",
+        status="pending",
+        model="human",
+        created_at="now",
+        updated_at="now",
     )
     text = review.render_draft(draft, 1, 3)
     assert "[1/3]" in text

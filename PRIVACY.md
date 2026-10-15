@@ -1,56 +1,48 @@
-# Privacy notice ? operator customization required
+# Privacy notice — complete before live use
 
-This describes the local CLI's current behavior. Before live operation, add your
-operator identity, real deletion contact, approved purpose/community scope,
-retention period, storage protections, and the authorized provider's data-use
-and retention terms. Do not claim that this template is a legal compliance
-certification. `privacy_policy_reviewed` should remain false until this is done.
+Operator: u/saurabhimapro (public developer/operator identity)
+Deletion contact: saurabhimapro@gmail.com
+Intended purpose: personal, non-commercial, human-written contributions
+Intended community: r/learnpython
+Approved scope/permission: [REQUIRED: actual Reddit approval and community permission]
+Retention period and storage protections: [REQUIRED]
 
-## Collection and purpose
+This template is not a compliance certification. Keep privacy_policy_reviewed
+false until these details and your actual operating practices are documented.
 
-The CLI reads submission IDs, titles, bodies, authors, community names, creation
-times, scores, comment counts, and permalinks from permitted public communities.
-Only sources eligible for the configured workflow are used. The purpose is
-preparing relevant contributions for human review, not profiling people,
-training models, advertising, or manipulating karma. There are no voting,
-private-message, or account-creation features.
+The operator manually chooses one submission. The app reads its ID, title, body,
+availability and community through the approved Reddit API. The source author is
+checked for deletion/availability but is not stored or displayed by this app.
+It does not collect score histories, discover users, infer sensitive traits,
+train models or send content to an external AI service.
 
-SQLite stores IDs, titles, authors, permalinks, community names, generated or
-edited comments, status, model, timestamps, a source-text hash, published comment
-links, and recorded comment scores. Source bodies are sent to the model but are
-not stored as a separate database field. Generated drafts may contain portions
-of source content and must be reviewed accordingly.
+SQLite stores source ID, title, community, URL, source hash, the human-written
+reply, review status, timestamps and the published comment URL. Compatibility
+columns retain an empty author and a human authorship marker. Daily publishing
+counters contain only UTC dates and attempt counts. Reddit receives the published
+reply. There are no advertising, private-message or voting features.
 
-## External processing and publication
+Queue retention defaults to seven days and can be configured from one to thirty
+days according to authorization. It is measured from creation, not last edit.
+Queue access and the running maintenance process prune expired records.
+The process checks hourly; it does not run while stopped. An installed Windows
+task can also run hourly and at logon while its owning user is signed in, with
+catch-up enabled. Source deletion
+synchronization requires a separately initiated approved API call (cleanup --sync).
+Daily counters older than yesterday are deleted during cleanup.
 
-The draft command sends post titles/bodies, community names and guidelines to
-Google Gemini only when explicit authorization is recorded. The CLI does not
-train a model. It cannot independently guarantee the provider's retention or
-training practices; the operator must verify that the authorized service/account
-and any separate agreement permit the processing. Do not enable drafting if
-those requirements cannot be met. Approved, disclosed comments are published
-through Reddit's API only after human confirmation.
+Cleanup removes local records and legacy app logs. New operational logs go only
+to the console. Terminal transcripts, backups, filesystem snapshots, editor
+temporary-file remnants and human-created reply files require separate operator
+handling. Generated drafts and score history from older versions are removed
+on database migration. Published Reddit comments require separate management.
 
-## Storage, retention, and requests
+Use restricted filesystem access and OS/disk encryption: this program does not
+encrypt its database. Credentials may be stored using current-user Windows DPAPI encryption or injected
+through environment variables. The encrypted credential file does not encrypt the
+queue, backups or operator-created reply files. Avoid persistent plaintext secrets.
+SQLite secure deletion is enabled but is not a guarantee of forensic erasure.
 
-`config.yaml`, `queue.db`, and rotating logs live locally and are git-ignored.
-Credentials are plaintext in config; Gemini credentials come from environment
-variables. SQLite is NOT encrypted by this program. Use appropriate OS/disk
-encryption, restricted filesystem access, and secure backups before attesting
-to data security. Git ignore is not a security boundary.
-
-Queue records expire after the configured 1-30 days from creation. Cleanup runs
-on queue access; it does not execute while the app is idle. Run cleanup regularly.
-Source verification removes local drafts/metadata and score history for deleted,
-removed, edited, protected, or out-of-scope sources. Failed verification blocks
-use until resolved. SQLite secure deletion is enabled; backups, filesystem
-snapshots, disk remnants, old logs, and external copies need separate handling.
-
-Provide your actual deletion contact in `policy.deletion_contact` and here.
-Process requests with `cleanup --post-id ID`. Run `cleanup --all` when shutting
-down or losing authorization, and handle logs/backups/provider records separately.
-Local cleanup does not delete live comments; manage those on Reddit as needed.
-Logs may include IDs, permalinks, subreddit names, counts, timestamps, error
-messages, and historical metadata from older releases. Do not log secrets, and
-review old logs during migration. Logs rotate by size rather than age; remove
-unneeded logs and backups as part of the operator's retention procedure.
+Handle deletion requests promptly with cleanup --post-id ID. On authorization
+revocation, stop live use and run cleanup --all; remove backups and other retained
+copies. Approval attestations are not proof of authorization.

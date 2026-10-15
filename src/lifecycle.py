@@ -1,4 +1,5 @@
 """Revalidate source posts before using queued material; fail closed on errors."""
+
 import hashlib
 
 from . import store
@@ -57,15 +58,15 @@ def refresh(conn, reddit, drafts, config: Config) -> list:
 
 def submit_checked(conn, reddit, draft, body: str, config: Config, submit):
     """Recheck immediately before every submission (including retries)."""
-    from .policy import AI_DISCLOSURE
-
     require_post(config, draft.subreddit)
+    store.prune(conn, config.policy.retention_days)
     current = store.get_draft(conn, draft.post_id)
-    if (current is None or current.status != store.STATUS_APPROVED
-            or current.comment != draft.comment):
+    if current is None or current.status != store.STATUS_APPROVED or current.comment != draft.comment:
         raise RuntimeError("Draft is no longer approved with the reviewed text")
-    if not body.rstrip().endswith(AI_DISCLOSURE):
-        raise RuntimeError("AI disclosure is missing")
+    if current.model != "human":
+        raise RuntimeError("Only human-written drafts can be published")
+    if not body.strip() or len(body) > 10000:
+        raise RuntimeError("Reply must contain 1-10,000 characters")
     if body != current.comment:
         raise RuntimeError("Submission text differs from the approved comment")
     source = verified_source(conn, reddit, draft, config)
@@ -73,9 +74,7 @@ def submit_checked(conn, reddit, draft, body: str, config: Config, submit):
         raise RuntimeError("Source changed or became unavailable; local data was removed")
     if source.locked or source.archived:
         raise RuntimeError("Source is locked or archived")
-    # Never post the same normalized comment text twice from the retained queue.
-    normalized = " ".join(body.casefold().split())
-    if any(" ".join(d.comment.casefold().split()) == normalized
-           for d in store.list_drafts(conn, store.STATUS_POSTED)):
-        raise RuntimeError("Duplicate comment text; posting blocked")
-    return submit(reddit, draft.post_id, body)
+    store.reserve_publish(conn, draft, config.post.max_posts_per_day)
+    url = submit(reddit, draft.post_id, body)
+    store.mark_posted(conn, draft.post_id, url)
+    return url

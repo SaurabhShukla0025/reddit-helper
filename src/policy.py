@@ -1,65 +1,85 @@
-"""Fail-closed operational checks for the contribution assistant.
+"""Fail-closed checks. Operator attestations never grant Reddit permission."""
 
-Configuration records permissions obtained elsewhere; it cannot verify or grant
-Reddit approval. No network is used by these checks.
-"""
 from datetime import date
+from hashlib import sha256
+from pathlib import Path
 
-from .config import Config, PolicyConfig, Subreddit
+from .config import Config, Subreddit
 
-AI_DISCLOSURE = "AI-assisted draft, reviewed and edited as needed by a human."
+PRIVACY_PATH = Path(__file__).resolve().parent.parent / "PRIVACY.md"
+
+
+def privacy_digest() -> str:
+    return sha256(PRIVACY_PATH.read_bytes()).hexdigest()
 
 
 def require_api(config: Config) -> None:
     p = config.policy
-    required = {
-        "api_approval_reference": p.api_approval_reference,
-        "app_registration_reference": p.app_registration_reference,
-        "dedicated_app_username": p.dedicated_app_username,
-        "privacy_policy_reviewed": p.privacy_policy_reviewed,
-        "data_security_reviewed": p.data_security_reviewed,
-        "deletion_contact": p.deletion_contact,
-    }
-    missing = [key for key, value in required.items() if not value]
+    required = (
+        "api_approval_reference",
+        "app_registration_reference",
+        "dedicated_app_username",
+        "privacy_policy_reviewed",
+        "data_security_reviewed",
+        "deletion_contact",
+        "approved_purpose",
+        "operator_identity",
+        "app_profile_label_reference",
+        "terms_accepted_on",
+        "devvit_assessment_reference",
+        "external_api_exception_reference",
+        "storage_security_reference",
+        "backup_deletion_procedure_reference",
+        "cleanup_schedule_reference",
+        "privacy_notice_sha256",
+    )
+    missing = [key for key in required if not getattr(p, key)]
     if missing:
-        raise SystemExit("Live API access blocked: record real permissions/settings in policy: " + ", ".join(missing))
+        raise SystemExit("Live API access blocked: record real authorization: " + ", ".join(missing))
+    try:
+        terms_date = date.fromisoformat(p.terms_accepted_on)
+    except ValueError:
+        raise SystemExit("Record the actual developer/API terms acceptance date (YYYY-MM-DD)")
+    if terms_date > date.today():
+        raise SystemExit("Terms acceptance cannot be future-dated")
+    try:
+        notice = PRIVACY_PATH.read_text(encoding="utf-8-sig")
+    except OSError:
+        raise SystemExit("Live access blocked: privacy notice is unavailable") from None
+    if "[REQUIRED" in notice or p.privacy_notice_sha256 != privacy_digest():
+        raise SystemExit("Live access blocked: complete and review the current privacy notice")
+    if p.operator_identity not in notice or p.deletion_contact not in notice:
+        raise SystemExit("Live access blocked: privacy notice must identify the operator and deletion contact")
     if config.reddit.username.casefold() != p.dedicated_app_username.casefold():
-        raise SystemExit("Live API access blocked: reddit.username must match the dedicated app account")
-    for sub in config.subreddits:
-        require_community(sub)
+        raise SystemExit("Live API access blocked: dedicated app username mismatch")
+    if p.approval_expires_on:
+        try:
+            expiry = date.fromisoformat(p.approval_expires_on)
+        except ValueError:
+            raise SystemExit("approval_expires_on must be YYYY-MM-DD")
+        if date.today() > expiry:
+            raise SystemExit("Live API access blocked: approval expired")
+    if len(config.subreddits) != 1:
+        raise SystemExit("Exactly one approved community is required")
+    require_community(config.subreddits[0])
 
 
 def require_community(sub: Subreddit, *, comments: bool = False) -> None:
     if not sub.access_reference:
-        raise SystemExit(f"r/{sub.name}: record access_reference for the approved community scope")
+        raise SystemExit("Community access approval is missing")
     try:
         reviewed = date.fromisoformat(sub.rules_reviewed_on)
     except ValueError:
-        raise SystemExit(f"r/{sub.name}: rules_reviewed_on must be a YYYY-MM-DD date")
-    age = (date.today() - reviewed).days
-    if not 0 <= age <= 30:
-        raise SystemExit(f"r/{sub.name}: review current community rules (review must be within 30 days)")
-    if comments and (not sub.comments_reference or not sub.ai_comments_allowed):
-        raise SystemExit(f"r/{sub.name}: posting requires comments_reference and permission for disclosed AI comments")
-
-
-def require_external_ai(p: PolicyConfig) -> None:
-    if not p.external_ai_approval_reference or not p.provider_data_use_reviewed:
-        raise SystemExit("Gemini drafting blocked: record explicit authorization for "
-                         "third-party AI processing and review provider data use")
+        raise SystemExit("rules_reviewed_on must be YYYY-MM-DD")
+    if not 0 <= (date.today() - reviewed).days <= 30:
+        raise SystemExit("Review current community rules before continuing")
+    if comments and not sub.comments_reference:
+        raise SystemExit("Community permission for app replies is missing")
 
 
 def require_post(config: Config, subreddit: str) -> None:
     require_api(config)
-    require_external_ai(config.policy)
-    sub = next((s for s in config.subreddits if s.name.casefold() == subreddit.casefold()), None)
-    if sub is None:
-        raise SystemExit(f"r/{subreddit}: not in the currently approved community list")
+    sub = config.subreddits[0]
+    if sub.name.casefold() != subreddit.casefold():
+        raise SystemExit("Post is outside the approved community")
     require_community(sub, comments=True)
-
-
-def disclosed(comment: str) -> str:
-    """Append a fixed disclosure; the operator cannot configure it away."""
-    if comment.rstrip().endswith(AI_DISCLOSURE):
-        return comment.strip()
-    return f"{comment.strip()}\n\n{AI_DISCLOSURE}"
